@@ -99,9 +99,13 @@ export function BookForm({
           latest.current.onChange(next)
           toast.success('Found it — details filled in')
         }
-      } catch {
+      } catch (err) {
         if (!cancelled) {
-          toast.error('Lookup failed — check your connection')
+          toast.error(
+            err instanceof Error
+              ? err.message
+              : 'Lookup failed — check your connection',
+          )
         }
       } finally {
         if (!cancelled) setLookingUp(false)
@@ -133,8 +137,12 @@ export function BookForm({
         isbn: result.isbn || toLookupIsbn(v.isbn) || v.isbn,
       })
       toast.success('Details updated from ISBN')
-    } catch {
-      toast.error('Lookup failed — check your connection')
+    } catch (err) {
+      toast.error(
+        err instanceof Error
+          ? err.message
+          : 'Lookup failed — check your connection',
+      )
     } finally {
       setLookingUp(false)
     }

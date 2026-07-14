@@ -1,9 +1,9 @@
 import { defineConfig, type Plugin } from 'vite'
-import { fileURLToPath, URL } from 'node:url'
+import { pathToFileURL, fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-/** Serve /api/book-lookup in local vite so Chinese ISBN lookup works off Vercel. */
+/** Serve /api/book-lookup in local vite so Asian ISBN lookup works off Vercel. */
 function bookLookupDevApi(): Plugin {
   return {
     name: 'shelfie-book-lookup-api',
@@ -16,14 +16,26 @@ function bookLookupDevApi(): Plugin {
         try {
           const url = new URL(req.url, 'http://localhost')
           const isbn = url.searchParams.get('isbn') ?? ''
-          const { lookupIsbnServer } = await server.ssrLoadModule(
-            '/api/_lib/isbnLookup.ts',
+          const apiPath = fileURLToPath(
+            new URL('./api/book-lookup.mjs', import.meta.url),
           )
-          const result = await lookupIsbnServer(isbn)
+          const mod = (await import(
+            `${pathToFileURL(apiPath).href}?t=${Date.now()}`
+          )) as {
+            lookupIsbnServer: (
+              isbn: string,
+            ) => Promise<Record<string, unknown> | null>
+          }
+          const result = await mod.lookupIsbnServer(isbn)
           res.setHeader('Content-Type', 'application/json')
           if (!result) {
             res.statusCode = 404
             res.end(JSON.stringify({ error: 'Not found' }))
+            return
+          }
+          if (result.error === 'japanese_classification_code') {
+            res.statusCode = 422
+            res.end(JSON.stringify(result))
             return
           }
           res.statusCode = 200

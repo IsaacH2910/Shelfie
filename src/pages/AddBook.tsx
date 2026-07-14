@@ -14,6 +14,16 @@ import { useHouseholds } from '@/hooks/useHouseholds'
 import { useAuth } from '@/context/AuthProvider'
 import { searchBooks, type LookupResult } from '@/lib/bookLookup'
 import { findDuplicates, normalizeIsbn, toLookupIsbn } from '@/lib/duplicates'
+
+function isJapaneseClassificationCode(isbn: string): boolean {
+  const digits = normalizeIsbn(isbn)
+  return (
+    digits.length === 13 &&
+    digits.startsWith('19') &&
+    !digits.startsWith('978') &&
+    !digits.startsWith('979')
+  )
+}
 import { uploadCover } from '@/lib/storage'
 import type { BookDraft } from '@/types'
 
@@ -95,6 +105,13 @@ export default function AddBookPage() {
   // Barcode scanned → check duplicates, then drop ISBN into form for auto-lookup.
   const handleBarcode = (text: string) => {
     const isbn = toLookupIsbn(text)
+    if (isJapaneseClassificationCode(text) || isJapaneseClassificationCode(isbn)) {
+      setAssist('none')
+      toast.error(
+        'That barcode is a Japanese price code — scan the ISBN (starts with 978)',
+      )
+      return
+    }
     if (isbn.length < 10) {
       setDraft((d) => ({
         ...d,

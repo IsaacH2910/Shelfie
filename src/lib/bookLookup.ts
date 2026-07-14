@@ -12,7 +12,7 @@ export type LookupResult = {
   isbn: string
   language: string
   cover_url: string | null
-  source: 'google' | 'openlibrary' | 'isbnsearch'
+  source: 'google' | 'openlibrary' | 'isbnsearch' | 'isbn.tw' | 'openbd'
 }
 
 type GoogleVolume = {
@@ -205,7 +205,7 @@ function isbnCandidates(rawIsbn: string): string[] {
   return out
 }
 
-/** Server route covers Chinese editions Google/OL often miss (isbnsearch). */
+/** Server route covers Chinese/Japanese editions Google/OL often miss. */
 async function lookupViaServer(
   isbn: string,
   signal?: AbortSignal,
@@ -215,6 +215,13 @@ async function lookupViaServer(
       `/api/book-lookup?isbn=${encodeURIComponent(isbn)}`,
       { signal },
     )
+    if (res.status === 422) {
+      const data = (await res.json()) as { message?: string }
+      throw new Error(
+        data.message ||
+          'That barcode is not an ISBN. Scan the ISBN (starts with 978).',
+      )
+    }
     if (!res.ok) return null
     const data = (await res.json()) as LookupResult
     if (!data?.title) return null
@@ -226,7 +233,10 @@ async function lookupViaServer(
       cover_url: data.cover_url ?? null,
       source: data.source ?? 'isbnsearch',
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof Error && /ISBN|barcode|978/i.test(err.message)) {
+      throw err
+    }
     return null
   }
 }
