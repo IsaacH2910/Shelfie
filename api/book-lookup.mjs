@@ -324,15 +324,18 @@ async function lookupOpenLibrary(isbn) {
   const entry = data?.[`ISBN:${isbn}`]
   if (!entry?.title) return null
   const langKey = entry.languages?.[0]?.key?.replace('/languages/', '') || ''
-  // Open Library language tags are often noisy; only keep clear ISO-ish codes.
-  let language = sanitizeLanguage(langKey.slice(0, 3) === 'chi' || langKey.startsWith('zho')
-    ? guessLanguage(entry.title) || 'zh-Hans'
-    : langKey.startsWith('jpn')
-      ? 'ja'
-      : langKey.startsWith('kor')
-        ? 'ko'
-        : langKey.slice(0, 2))
-  if (!language) language = guessLanguage(entry.title)
+  // Open Library language tags are often wrong globally — only trust clear CJK markers.
+  let language = ''
+  if (langKey.startsWith('jpn')) language = 'ja'
+  else if (langKey.startsWith('kor')) language = 'ko'
+  else if (langKey.startsWith('chi') || langKey.startsWith('zho')) {
+    language = guessLanguage(entry.title) || 'zh-Hans'
+  } else {
+    language = guessLanguage(entry.title)
+  }
+  language = sanitizeLanguage(language)
+  if (!languageMatchesTitle(language, entry.title)) language = ''
+
   return {
     title: entry.title,
     author: (entry.authors || [])
