@@ -12,6 +12,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/Spinner'
 import {
+  AUTO_OCR_TESSERACT,
   OCR_LANGUAGES,
   resolveTesseractLanguage,
 } from '@/lib/tesseractLanguages'
@@ -43,7 +44,9 @@ export function CoverScanner({
   const [cameraOn, setCameraOn] = useState(false)
   const [startingCamera, setStartingCamera] = useState(false)
   const [ocrLanguage, setOcrLanguage] = useState(() =>
-    resolveTesseractLanguage(defaultLanguage),
+    defaultLanguage
+      ? resolveTesseractLanguage(defaultLanguage)
+      : AUTO_OCR_TESSERACT,
   )
 
   useEffect(() => {
@@ -167,14 +170,15 @@ export function CoverScanner({
           </SelectTrigger>
           <SelectContent>
             {OCR_LANGUAGES.map((lang) => (
-              <SelectItem key={lang.tesseract} value={lang.tesseract}>
+              <SelectItem key={lang.code} value={lang.tesseract}>
                 {lang.label}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Pick Traditional Chinese for 繁體 covers, Simplified for 简体.
+          Use Auto for mixed or unknown scripts, or pick the cover language for
+          faster, more accurate reading.
         </p>
       </div>
 

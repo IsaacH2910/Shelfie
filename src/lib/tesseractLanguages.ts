@@ -1,3 +1,5 @@
+import { LANGUAGES } from '@/lib/languages'
+
 /** Map app language codes to Tesseract traineddata pack names. */
 const APP_TO_TESSERACT: Record<string, string> = {
   en: 'eng',
@@ -32,36 +34,42 @@ const APP_TO_TESSERACT: Record<string, string> = {
   ro: 'ron',
 }
 
+/**
+ * Broad multi-script pack for unknown / mixed covers. First use downloads
+ * several models; later runs reuse the browser cache.
+ */
+export const AUTO_OCR_TESSERACT =
+  'eng+chi_sim+chi_tra+jpn+kor+rus+ara+hin+tha+ell+heb+vie'
+
 export type OcrLanguageOption = {
   code: string
   tesseract: string
   label: string
 }
 
+/** Non-Latin packs also include eng for bilingual covers. */
+function withEnglishFallback(pack: string): string {
+  if (pack === 'eng' || pack.includes('+')) return pack
+  return `${pack}+eng`
+}
+
 export const OCR_LANGUAGES: OcrLanguageOption[] = [
-  { code: 'en', tesseract: 'eng', label: 'English' },
   {
-    code: 'zh-Hans',
-    tesseract: 'chi_sim',
-    label: 'Chinese (Simplified)',
+    code: 'auto',
+    tesseract: AUTO_OCR_TESSERACT,
+    label: 'Auto (all common scripts)',
   },
-  {
-    code: 'zh-Hant',
-    tesseract: 'chi_tra',
-    label: 'Chinese (Traditional)',
-  },
-  { code: 'ja', tesseract: 'jpn', label: 'Japanese' },
-  { code: 'ko', tesseract: 'kor', label: 'Korean' },
-  { code: 'fr', tesseract: 'fra', label: 'French' },
-  { code: 'de', tesseract: 'deu', label: 'German' },
-  { code: 'es', tesseract: 'spa', label: 'Spanish' },
-  { code: 'it', tesseract: 'ita', label: 'Italian' },
-  { code: 'pt', tesseract: 'por', label: 'Portuguese' },
-  { code: 'ru', tesseract: 'rus', label: 'Russian' },
-  { code: 'ar', tesseract: 'ara', label: 'Arabic' },
-  { code: 'hi', tesseract: 'hin', label: 'Hindi' },
-  { code: 'th', tesseract: 'tha', label: 'Thai' },
-  { code: 'vi', tesseract: 'vie', label: 'Vietnamese' },
+  ...LANGUAGES.filter((language) => language.code !== 'other')
+    .map((language) => {
+      const pack = APP_TO_TESSERACT[language.code]
+      if (!pack) return null
+      return {
+        code: language.code,
+        tesseract: withEnglishFallback(pack),
+        label: `${language.name} · ${language.native}`,
+      } satisfies OcrLanguageOption
+    })
+    .filter((option): option is OcrLanguageOption => option !== null),
 ]
 
 /** Resolve a Tesseract language pack from an app language code or browser locale. */
@@ -70,13 +78,14 @@ export function resolveTesseractLanguage(
 ): string {
   if (appLanguage) {
     const mapped = APP_TO_TESSERACT[appLanguage]
-    if (mapped) return mapped
+    if (mapped) return withEnglishFallback(mapped)
   }
   const browser = navigator.language.toLowerCase()
   if (browser.startsWith('zh-tw') || browser.startsWith('zh-hk')) {
-    return 'chi_tra'
+    return withEnglishFallback('chi_tra')
   }
-  if (browser.startsWith('zh')) return 'chi_sim'
+  if (browser.startsWith('zh')) return withEnglishFallback('chi_sim')
   const short = browser.split('-')[0]
-  return APP_TO_TESSERACT[short] ?? 'eng'
+  const pack = APP_TO_TESSERACT[short]
+  return pack ? withEnglishFallback(pack) : AUTO_OCR_TESSERACT
 }
