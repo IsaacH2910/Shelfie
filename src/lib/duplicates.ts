@@ -15,6 +15,36 @@ export function normalizeIsbn(value: string | null | undefined): string {
   return (value ?? '').replace(/[^0-9xX]/g, '').toUpperCase()
 }
 
+/** Convert ISBN-10 to ISBN-13 (Bookland 978-…). */
+export function isbn10To13(isbn10: string): string | null {
+  const raw = normalizeIsbn(isbn10)
+  if (raw.length !== 10) return null
+  const core = `978${raw.slice(0, 9)}`
+  let sum = 0
+  for (let i = 0; i < 12; i++) {
+    sum += Number(core[i]) * (i % 2 === 0 ? 1 : 3)
+  }
+  const check = (10 - (sum % 10)) % 10
+  return `${core}${check}`
+}
+
+/**
+ * Normalize a scanned/typed code into the ISBN form we store and look up.
+ * Pads UPC-A (12 digits) to EAN-13 and upgrades ISBN-10 → ISBN-13.
+ */
+export function toLookupIsbn(value: string | null | undefined): string {
+  let isbn = normalizeIsbn(value)
+  if (isbn.length === 12) isbn = `0${isbn}`
+  if (isbn.length === 10) return isbn10To13(isbn) ?? isbn
+  return isbn
+}
+
+/** True when we have enough digits to attempt an online ISBN lookup. */
+export function isLookupIsbn(value: string | null | undefined): boolean {
+  const len = normalizeIsbn(value).length
+  return len === 10 || len === 12 || len === 13
+}
+
 export type DuplicateReason = 'isbn' | 'title'
 
 export type DuplicateMatch = {

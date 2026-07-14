@@ -12,7 +12,7 @@ import { useBooks, useCreateBook } from '@/hooks/useBooks'
 import { useHouseholds } from '@/hooks/useHouseholds'
 import { useAuth } from '@/context/AuthProvider'
 import { searchBooks, type LookupResult } from '@/lib/bookLookup'
-import { findDuplicates, normalizeIsbn } from '@/lib/duplicates'
+import { findDuplicates, normalizeIsbn, toLookupIsbn } from '@/lib/duplicates'
 import { uploadCover } from '@/lib/storage'
 import type { BookDraft } from '@/types'
 
@@ -92,7 +92,17 @@ export default function AddBookPage() {
 
   // Barcode scanned → check duplicates, then drop ISBN into form for auto-lookup.
   const handleBarcode = (text: string) => {
-    const isbn = normalizeIsbn(text)
+    const isbn = toLookupIsbn(text)
+    if (isbn.length < 10) {
+      setDraft((d) => ({
+        ...d,
+        isbn: normalizeIsbn(text),
+        source: 'barcode',
+      }))
+      setAssist('none')
+      toast.error('That barcode does not look like an ISBN — check the digits')
+      return
+    }
     const matches = findDuplicates(
       {
         title: '',
@@ -113,7 +123,7 @@ export default function AddBookPage() {
         },
       })
     }
-    setDraft((d) => ({ ...d, isbn: text, source: 'barcode' }))
+    setDraft((d) => ({ ...d, isbn, source: 'barcode' }))
     setAssist('none')
     toast.success('Barcode captured — looking it up')
   }

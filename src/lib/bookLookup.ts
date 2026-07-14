@@ -1,4 +1,9 @@
-import { normalizeIsbn } from '@/lib/duplicates'
+import {
+  isbn10To13,
+  isLookupIsbn,
+  normalizeIsbn,
+  toLookupIsbn,
+} from '@/lib/duplicates'
 import { normalizeLanguageCode } from '@/lib/languages'
 
 export type LookupResult = {
@@ -32,7 +37,7 @@ function isbnFromGoogle(volume: GoogleVolume): string {
   const ids = volume.volumeInfo?.industryIdentifiers ?? []
   const isbn13 = ids.find((i) => i.type === 'ISBN_13')?.identifier
   const isbn10 = ids.find((i) => i.type === 'ISBN_10')?.identifier
-  return normalizeIsbn(isbn13 ?? isbn10 ?? '')
+  return toLookupIsbn(isbn13 ?? isbn10 ?? '')
 }
 
 function mapGoogleVolume(volume: GoogleVolume): LookupResult | null {
@@ -66,12 +71,17 @@ async function fetchJson<T>(
   }
 }
 
+function googleBooksKey(): string {
+  const key = import.meta.env.VITE_GOOGLE_BOOKS_API_KEY as string | undefined
+  return key?.trim() ? `&key=${encodeURIComponent(key.trim())}` : ''
+}
+
 async function lookupGoogleByIsbn(
   isbn: string,
   signal?: AbortSignal,
 ): Promise<LookupResult | null> {
   const data = await fetchJson<GoogleResponse>(
-    `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1`,
+    `https://www.googleapis.com/books/v1/volumes?q=isbn:${isbn}&maxResults=1${googleBooksKey()}`,
     signal,
   )
   const volume = data?.items?.[0]
@@ -115,6 +125,47 @@ async function lookupOpenLibrary(
   }
 }
 
+type OpenLibrarySearch = {
+  docs?: {
+    title?: string
+    author_name?: string[]
+    cover_i?: number
+    language?: string[]
+    isbn?: string[]
+  }[]
+}
+
+/** Last-resort: Open Library search often finds editions the bibkeys API misses. */
+async function lookupOpenLibrarySearch(
+  isbn: string,
+  signal?: AbortSignal,
+): Promise<LookupResult | null> {
+  const data = await fetchJson<OpenLibrarySearch>(
+    `https://openlibrary.org/search.json?q=${encodeURIComponent(
+      isbn,
+    )}&limit=5&fields=title,author_name,cover_i,language,isbn`,
+    signal,
+  )
+  const docs = data?.docs ?? []
+  const match =
+    docs.find((doc) =>
+      (doc.isbn ?? []).some((id) => normalizeIsbn(id) === isbn),
+    ) ?? docs[0]
+  if (!match?.title) return null
+  return {
+    title: match.title,
+    author: (match.author_name ?? []).join(', '),
+    isbn: toLookupIsbn(
+      match.isbn?.find((id) => normalizeIsbn(id).length >= 10) ?? isbn,
+    ),
+    language: normalizeLanguageCode(match.language?.[0]),
+    cover_url: match.cover_i
+      ? `https://covers.openlibrary.org/b/id/${match.cover_i}-M.jpg`
+      : null,
+    source: 'openlibrary',
+  }
+}
+
 /** Prefer the richer primary result, filling any gaps from the secondary. */
 function mergeLookups(
   primary: LookupResult,
@@ -131,34 +182,69 @@ function mergeLookups(
   }
 }
 
+/** ISBN-10 and ISBN-13 (and UPC-padded EAN) forms to try against the APIs. */
+function isbnCandidates(rawIsbn: string): string[] {
+  const primary = toLookupIsbn(rawIsbn)
+  const normalized = normalizeIsbn(rawIsbn)
+  const out: string[] = []
+  const add = (value: string | null | undefined) => {
+    if (value && value.length >= 10 && !out.includes(value)) out.push(value)
+  }
+
+  add(primary)
+  if (normalized.length === 10) {
+    add(normalized)
+    add(isbn10To13(normalized))
+  }
+  if (normalized.length === 12) add(`0${normalized}`)
+  if (normalized.length === 13 && normalized.startsWith('978')) {
+    const body = normalized.slice(3, 12)
+    let sum = 0
+    for (let i = 0; i < 9; i++) sum += Number(body[i]) * (10 - i)
+    const check = (11 - (sum % 11)) % 11
+    add(`${body}${check === 10 ? 'X' : String(check)}`)
+  }
+
+  return out
+}
+
+async function lookupOneIsbn(
+  isbn: string,
+  signal?: AbortSignal,
+): Promise<LookupResult | null> {
+  // Query both in parallel; prefer Open Library because Google's anonymous
+  // quota is frequently exhausted (HTTP 429).
+  const [openlib, google] = await Promise.all([
+    lookupOpenLibrary(isbn, signal),
+    lookupGoogleByIsbn(isbn, signal),
+  ])
+  if (openlib) return mergeLookups(openlib, google, isbn)
+  if (google) return mergeLookups(google, null, isbn)
+  return lookupOpenLibrarySearch(isbn, signal)
+}
+
 /**
- * Look up a single book by ISBN. Google Books and Open Library are queried in
- * parallel and merged, so a Google rate-limit (HTTP 429) never blocks the
- * result and richer fields (language, cover) are used when available.
+ * Look up a single book by ISBN. Tries ISBN-10/13 variants, Open Library first,
+ * then Google Books, then Open Library search — so a Google rate-limit never
+ * blocks a result.
  */
 export async function lookupByIsbn(
   rawIsbn: string,
   signal?: AbortSignal,
 ): Promise<LookupResult | null> {
-  const isbn = normalizeIsbn(rawIsbn)
-  if (isbn.length < 10) return null
-  const [google, openlib] = await Promise.all([
-    lookupGoogleByIsbn(isbn, signal),
-    lookupOpenLibrary(isbn, signal),
-  ])
-  if (google) return mergeLookups(google, openlib, isbn)
-  if (openlib) return mergeLookups(openlib, null, isbn)
-  return null
-}
+  if (!isLookupIsbn(rawIsbn)) return null
 
-type OpenLibrarySearch = {
-  docs?: {
-    title?: string
-    author_name?: string[]
-    cover_i?: number
-    language?: string[]
-    isbn?: string[]
-  }[]
+  for (const isbn of isbnCandidates(rawIsbn)) {
+    if (signal?.aborted) return null
+    const result = await lookupOneIsbn(isbn, signal)
+    if (result) {
+      return {
+        ...result,
+        isbn: result.isbn || toLookupIsbn(rawIsbn),
+      }
+    }
+  }
+  return null
 }
 
 async function searchOpenLibrary(
@@ -182,7 +268,7 @@ async function searchOpenLibrary(
     results.push({
       title: doc.title,
       author: (doc.author_name ?? []).join(', '),
-      isbn: normalizeIsbn(doc.isbn?.[0] ?? ''),
+      isbn: toLookupIsbn(doc.isbn?.[0] ?? ''),
       language: normalizeLanguageCode(doc.language?.[0]),
       cover_url: doc.cover_i
         ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
@@ -207,7 +293,7 @@ export async function searchBooks(
   const data = await fetchJson<GoogleResponse>(
     `https://www.googleapis.com/books/v1/volumes?q=${encodeURIComponent(
       trimmed,
-    )}&maxResults=8`,
+    )}&maxResults=8${googleBooksKey()}`,
     signal,
   )
   const results: LookupResult[] = []

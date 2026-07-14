@@ -21,7 +21,12 @@ import { CoverUpload } from '@/components/CoverUpload'
 import { DuplicateWarning } from '@/components/DuplicateWarning'
 import { Spinner } from '@/components/Spinner'
 import { collectCategories } from '@/lib/categories'
-import { findDuplicates, normalizeIsbn } from '@/lib/duplicates'
+import {
+  findDuplicates,
+  isLookupIsbn,
+  normalizeIsbn,
+  toLookupIsbn,
+} from '@/lib/duplicates'
 import { lookupByIsbn } from '@/lib/bookLookup'
 import type { Book, BookDraft, HouseholdWithRole } from '@/types'
 
@@ -57,7 +62,7 @@ export function BookForm({
   const [lookingUp, setLookingUp] = useState(false)
   const lastLookedUp = useRef('')
   const isbnDigits = normalizeIsbn(value.isbn)
-  const isbnComplete = isbnDigits.length === 10 || isbnDigits.length === 13
+  const isbnComplete = isLookupIsbn(isbnDigits)
 
   // Auto look-up: when a full ISBN is typed or scanned, fill any blank fields
   // automatically (non-destructive — never overwrites what you've entered).
@@ -70,7 +75,11 @@ export function BookForm({
       setLookingUp(true)
       try {
         const result = await lookupByIsbn(isbnDigits)
-        if (cancelled || !result) return
+        if (cancelled) return
+        if (!result) {
+          toast.info('No online match for that ISBN — enter details manually')
+          return
+        }
         const v = latest.current.value
         const next: BookDraft = {
           ...v,
@@ -78,19 +87,22 @@ export function BookForm({
           author: v.author || result.author,
           language: v.language || result.language,
           cover_url: v.cover_url ?? result.cover_url,
-          isbn: result.isbn || v.isbn,
+          isbn: result.isbn || toLookupIsbn(v.isbn) || v.isbn,
         }
         if (
           next.title !== v.title ||
           next.author !== v.author ||
           next.language !== v.language ||
-          next.cover_url !== v.cover_url
+          next.cover_url !== v.cover_url ||
+          next.isbn !== v.isbn
         ) {
           latest.current.onChange(next)
           toast.success('Found it — details filled in')
         }
       } catch {
-        // Stay quiet on auto-lookup; the manual refresh surfaces errors.
+        if (!cancelled) {
+          toast.error('Lookup failed — check your connection')
+        }
       } finally {
         if (!cancelled) setLookingUp(false)
       }
@@ -118,7 +130,7 @@ export function BookForm({
         author: result.author || v.author,
         language: result.language || v.language,
         cover_url: result.cover_url ?? v.cover_url,
-        isbn: result.isbn || v.isbn,
+        isbn: result.isbn || toLookupIsbn(v.isbn) || v.isbn,
       })
       toast.success('Details updated from ISBN')
     } catch {

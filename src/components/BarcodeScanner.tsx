@@ -8,6 +8,36 @@ import { Camera, CameraOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/Spinner'
 
+const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  facingMode: { ideal: 'environment' },
+  width: { ideal: 1920 },
+  height: { ideal: 1080 },
+}
+
+const ZXING_FORMATS = [
+  BarcodeFormat.EAN_13,
+  BarcodeFormat.EAN_8,
+  BarcodeFormat.UPC_A,
+  BarcodeFormat.UPC_E,
+]
+
+const NATIVE_FORMATS = ['ean_13', 'ean_8', 'upc_a', 'upc_e'] as const
+
+type BarcodeDetectorLike = {
+  detect: (source: ImageBitmapSource) => Promise<Array<{ rawValue: string }>>
+}
+
+type BarcodeDetectorCtor = new (options?: {
+  formats?: string[]
+}) => BarcodeDetectorLike
+
+function getBarcodeDetector(): BarcodeDetectorCtor | null {
+  const ctor = (
+    window as Window & { BarcodeDetector?: BarcodeDetectorCtor }
+  ).BarcodeDetector
+  return typeof ctor === 'function' ? ctor : null
+}
+
 function friendlyCameraError(err: unknown): string {
   const name = err instanceof DOMException ? err.name : ''
   const message = err instanceof Error ? err.message : ''
@@ -29,16 +59,75 @@ function friendlyCameraError(err: unknown): string {
 
 function createReader() {
   const hints = new Map()
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, [
-    BarcodeFormat.EAN_13,
-    BarcodeFormat.EAN_8,
-    BarcodeFormat.UPC_A,
-  ])
-  return new BrowserMultiFormatReader(hints)
+  hints.set(DecodeHintType.POSSIBLE_FORMATS, ZXING_FORMATS)
+  hints.set(DecodeHintType.TRY_HARDER, true)
+  return new BrowserMultiFormatReader(hints, {
+    delayBetweenScanAttempts: 100,
+    delayBetweenScanSuccess: 500,
+    tryPlayVideoTimeout: 10000,
+  })
 }
 
 function stopStream(stream: MediaStream | null) {
   stream?.getTracks().forEach((track) => track.stop())
+}
+
+/** iOS Safari can report 0×0 until metadata settles — ZXing then builds a dead canvas. */
+function waitForVideoDimensions(
+  video: HTMLVideoElement,
+  timeoutMs = 8000,
+): Promise<void> {
+  if (video.videoWidth > 0 && video.videoHeight > 0) return Promise.resolve()
+
+  return new Promise((resolve, reject) => {
+    const started = Date.now()
+
+    const done = () => {
+      cleanup()
+      resolve()
+    }
+    const fail = () => {
+      cleanup()
+      reject(new Error('Camera preview failed to start. Try again.'))
+    }
+    const tick = () => {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        done()
+        return
+      }
+      if (Date.now() - started > timeoutMs) {
+        fail()
+        return
+      }
+      raf = requestAnimationFrame(tick)
+    }
+
+    let raf = 0
+    const onMeta = () => tick()
+    const cleanup = () => {
+      cancelAnimationFrame(raf)
+      video.removeEventListener('loadedmetadata', onMeta)
+      video.removeEventListener('loadeddata', onMeta)
+    }
+
+    video.addEventListener('loadedmetadata', onMeta)
+    video.addEventListener('loadeddata', onMeta)
+    tick()
+  })
+}
+
+async function openCameraStream(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: VIDEO_CONSTRAINTS,
+    })
+  } catch {
+    return navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: true,
+    })
+  }
 }
 
 export function BarcodeScanner({
@@ -54,6 +143,7 @@ export function BarcodeScanner({
   const firedRef = useRef(false)
   const controlsRef = useRef<IScannerControls | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const nativeTimerRef = useRef<number | null>(null)
   const [status, setStatus] = useState<
     'idle' | 'starting' | 'scanning' | 'error'
   >('idle')
@@ -62,10 +152,29 @@ export function BarcodeScanner({
   onResultRef.current = onResult
   onErrorRef.current = onError
 
+  const emitResult = (text: string) => {
+    const trimmed = text.trim()
+    if (!trimmed || firedRef.current) return
+    firedRef.current = true
+    onResultRef.current(trimmed)
+    controlsRef.current?.stop()
+    controlsRef.current = null
+    if (nativeTimerRef.current != null) {
+      window.clearInterval(nativeTimerRef.current)
+      nativeTimerRef.current = null
+    }
+    stopStream(streamRef.current)
+    streamRef.current = null
+  }
+
   useEffect(() => {
     return () => {
       controlsRef.current?.stop()
       controlsRef.current = null
+      if (nativeTimerRef.current != null) {
+        window.clearInterval(nativeTimerRef.current)
+        nativeTimerRef.current = null
+      }
       stopStream(streamRef.current)
       streamRef.current = null
     }
@@ -85,6 +194,10 @@ export function BarcodeScanner({
 
     controlsRef.current?.stop()
     controlsRef.current = null
+    if (nativeTimerRef.current != null) {
+      window.clearInterval(nativeTimerRef.current)
+      nativeTimerRef.current = null
+    }
     stopStream(streamRef.current)
     streamRef.current = null
     firedRef.current = false
@@ -93,19 +206,7 @@ export function BarcodeScanner({
 
     void (async () => {
       try {
-        // Prefer rear camera; fall back to any camera if that fails.
-        let stream: MediaStream
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: { facingMode: { ideal: 'environment' } },
-          })
-        } catch {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: true,
-          })
-        }
+        const stream = await openCameraStream()
 
         if (!videoRef.current) {
           stopStream(stream)
@@ -115,20 +216,34 @@ export function BarcodeScanner({
         streamRef.current = stream
         video.srcObject = stream
         video.setAttribute('playsinline', 'true')
+        video.muted = true
         await video.play().catch(() => undefined)
+        await waitForVideoDimensions(video)
 
+        const Detector = getBarcodeDetector()
+        if (Detector) {
+          const detector = new Detector({ formats: [...NATIVE_FORMATS] })
+          setStatus('scanning')
+          nativeTimerRef.current = window.setInterval(() => {
+            if (firedRef.current || !videoRef.current) return
+            void detector
+              .detect(videoRef.current)
+              .then((codes) => {
+                const value = codes[0]?.rawValue
+                if (value) emitResult(value)
+              })
+              .catch(() => undefined)
+          }, 250)
+          return
+        }
+
+        // Let ZXing own the stream attachment so its capture canvas gets real dimensions.
         const reader = createReader()
         const scannerControls = await reader.decodeFromStream(
           stream,
           video,
           (result) => {
-            if (result && !firedRef.current) {
-              firedRef.current = true
-              onResultRef.current(result.getText())
-              controlsRef.current?.stop()
-              stopStream(streamRef.current)
-              streamRef.current = null
-            }
+            if (result) emitResult(result.getText())
           },
         )
         controlsRef.current = scannerControls
@@ -170,7 +285,7 @@ export function BarcodeScanner({
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
           <div className="h-28 w-4/5 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
           <p className="absolute bottom-6 left-0 right-0 text-center text-sm font-medium text-white/90">
-            Point at the barcode on the back cover
+            Hold steady over the ISBN barcode
           </p>
         </div>
       ) : null}
