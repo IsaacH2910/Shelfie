@@ -23,6 +23,8 @@ const APP_TO_TESSERACT: Record<string, string> = {
   ja: 'jpn',
   ko: 'kor',
   zh: 'chi_sim',
+  'zh-Hans': 'chi_sim',
+  'zh-Hant': 'chi_tra',
   th: 'tha',
   vi: 'vie',
   id: 'ind',
@@ -38,7 +40,16 @@ export type OcrLanguageOption = {
 
 export const OCR_LANGUAGES: OcrLanguageOption[] = [
   { code: 'en', tesseract: 'eng', label: 'English' },
-  { code: 'zh', tesseract: 'chi_sim', label: 'Chinese (Simplified)' },
+  {
+    code: 'zh-Hans',
+    tesseract: 'chi_sim',
+    label: 'Chinese (Simplified)',
+  },
+  {
+    code: 'zh-Hant',
+    tesseract: 'chi_tra',
+    label: 'Chinese (Traditional)',
+  },
   { code: 'ja', tesseract: 'jpn', label: 'Japanese' },
   { code: 'ko', tesseract: 'kor', label: 'Korean' },
   { code: 'fr', tesseract: 'fra', label: 'French' },
@@ -61,6 +72,11 @@ export function resolveTesseractLanguage(
     const mapped = APP_TO_TESSERACT[appLanguage]
     if (mapped) return mapped
   }
-  const browser = navigator.language.split('-')[0].toLowerCase()
-  return APP_TO_TESSERACT[browser] ?? 'eng'
+  const browser = navigator.language.toLowerCase()
+  if (browser.startsWith('zh-tw') || browser.startsWith('zh-hk')) {
+    return 'chi_tra'
+  }
+  if (browser.startsWith('zh')) return 'chi_sim'
+  const short = browser.split('-')[0]
+  return APP_TO_TESSERACT[short] ?? 'eng'
 }

@@ -1,7 +1,46 @@
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import { fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+
+/** Serve /api/book-lookup in local vite so Chinese ISBN lookup works off Vercel. */
+function bookLookupDevApi(): Plugin {
+  return {
+    name: 'shelfie-book-lookup-api',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (!req.url?.startsWith('/api/book-lookup')) {
+          next()
+          return
+        }
+        try {
+          const url = new URL(req.url, 'http://localhost')
+          const isbn = url.searchParams.get('isbn') ?? ''
+          const { lookupIsbnServer } = await server.ssrLoadModule(
+            '/api/_lib/isbnLookup.ts',
+          )
+          const result = await lookupIsbnServer(isbn)
+          res.setHeader('Content-Type', 'application/json')
+          if (!result) {
+            res.statusCode = 404
+            res.end(JSON.stringify({ error: 'Not found' }))
+            return
+          }
+          res.statusCode = 200
+          res.end(JSON.stringify(result))
+        } catch (err) {
+          res.statusCode = 500
+          res.setHeader('Content-Type', 'application/json')
+          res.end(
+            JSON.stringify({
+              error: err instanceof Error ? err.message : 'Lookup failed',
+            }),
+          )
+        }
+      })
+    },
+  }
+}
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -16,6 +55,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
+    bookLookupDevApi(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],

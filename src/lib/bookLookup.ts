@@ -12,7 +12,7 @@ export type LookupResult = {
   isbn: string
   language: string
   cover_url: string | null
-  source: 'google' | 'openlibrary'
+  source: 'google' | 'openlibrary' | 'isbnsearch'
 }
 
 type GoogleVolume = {
@@ -135,7 +135,6 @@ type OpenLibrarySearch = {
   }[]
 }
 
-/** Last-resort: Open Library search often finds editions the bibkeys API misses. */
 async function lookupOpenLibrarySearch(
   isbn: string,
   signal?: AbortSignal,
@@ -150,7 +149,7 @@ async function lookupOpenLibrarySearch(
   const match =
     docs.find((doc) =>
       (doc.isbn ?? []).some((id) => normalizeIsbn(id) === isbn),
-    ) ?? docs[0]
+    ) ?? null
   if (!match?.title) return null
   return {
     title: match.title,
@@ -166,7 +165,6 @@ async function lookupOpenLibrarySearch(
   }
 }
 
-/** Prefer the richer primary result, filling any gaps from the secondary. */
 function mergeLookups(
   primary: LookupResult,
   secondary: LookupResult | null,
@@ -182,7 +180,6 @@ function mergeLookups(
   }
 }
 
-/** ISBN-10 and ISBN-13 (and UPC-padded EAN) forms to try against the APIs. */
 function isbnCandidates(rawIsbn: string): string[] {
   const primary = toLookupIsbn(rawIsbn)
   const normalized = normalizeIsbn(rawIsbn)
@@ -208,12 +205,39 @@ function isbnCandidates(rawIsbn: string): string[] {
   return out
 }
 
+/** Server route covers Chinese editions Google/OL often miss (isbnsearch). */
+async function lookupViaServer(
+  isbn: string,
+  signal?: AbortSignal,
+): Promise<LookupResult | null> {
+  try {
+    const res = await fetch(
+      `/api/book-lookup?isbn=${encodeURIComponent(isbn)}`,
+      { signal },
+    )
+    if (!res.ok) return null
+    const data = (await res.json()) as LookupResult
+    if (!data?.title) return null
+    return {
+      title: data.title,
+      author: data.author ?? '',
+      isbn: data.isbn || isbn,
+      language: normalizeLanguageCode(data.language),
+      cover_url: data.cover_url ?? null,
+      source: data.source ?? 'isbnsearch',
+    }
+  } catch {
+    return null
+  }
+}
+
 async function lookupOneIsbn(
   isbn: string,
   signal?: AbortSignal,
 ): Promise<LookupResult | null> {
-  // Query both in parallel; prefer Open Library because Google's anonymous
-  // quota is frequently exhausted (HTTP 429).
+  const server = await lookupViaServer(isbn, signal)
+  if (server) return server
+
   const [openlib, google] = await Promise.all([
     lookupOpenLibrary(isbn, signal),
     lookupGoogleByIsbn(isbn, signal),
@@ -224,9 +248,8 @@ async function lookupOneIsbn(
 }
 
 /**
- * Look up a single book by ISBN. Tries ISBN-10/13 variants, Open Library first,
- * then Google Books, then Open Library search — so a Google rate-limit never
- * blocks a result.
+ * Look up a single book by ISBN. Prefers the server route (better Chinese
+ * coverage), then Open Library / Google in the browser.
  */
 export async function lookupByIsbn(
   rawIsbn: string,

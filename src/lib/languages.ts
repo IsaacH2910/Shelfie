@@ -29,7 +29,18 @@ export const LANGUAGES: LanguageOption[] = [
   { code: 'hi', name: 'Hindi', native: 'हिन्दी', flag: '🇮🇳' },
   { code: 'ja', name: 'Japanese', native: '日本語', flag: '🇯🇵' },
   { code: 'ko', name: 'Korean', native: '한국어', flag: '🇰🇷' },
-  { code: 'zh', name: 'Chinese', native: '中文', flag: '🇨🇳' },
+  {
+    code: 'zh-Hans',
+    name: 'Chinese (Simplified)',
+    native: '简体中文',
+    flag: '🇨🇳',
+  },
+  {
+    code: 'zh-Hant',
+    name: 'Chinese (Traditional)',
+    native: '繁體中文',
+    flag: '🇹🇼',
+  },
   { code: 'th', name: 'Thai', native: 'ไทย', flag: '🇹🇭' },
   { code: 'vi', name: 'Vietnamese', native: 'Tiếng Việt', flag: '🇻🇳' },
   { code: 'id', name: 'Indonesian', native: 'Bahasa Indonesia', flag: '🇮🇩' },
@@ -69,8 +80,16 @@ const MARC_TO_ISO: Record<string, string> = {
   hin: 'hi',
   jpn: 'ja',
   kor: 'ko',
-  chi: 'zh',
-  zho: 'zh',
+  chi: 'zh-Hans',
+  zho: 'zh-Hans',
+  'zh-cn': 'zh-Hans',
+  'zh-sg': 'zh-Hans',
+  'zh-hans': 'zh-Hans',
+  'zh-tw': 'zh-Hant',
+  'zh-hk': 'zh-Hant',
+  'zh-mo': 'zh-Hant',
+  'zh-hant': 'zh-Hant',
+  zh: 'zh-Hans',
   tha: 'th',
   vie: 'vi',
   ind: 'id',
@@ -82,11 +101,26 @@ const MARC_TO_ISO: Record<string, string> = {
 /** Normalize an arbitrary language string/code to one of our option codes. */
 export function normalizeLanguageCode(input?: string | null): string {
   if (!input) return ''
-  const raw = input.trim().toLowerCase()
-  const short = raw.split(/[-_]/)[0]
-  if (BY_CODE.has(short)) return short
+  const raw = input.trim().toLowerCase().replace(/_/g, '-')
+  if (BY_CODE.has(raw)) return raw
   if (MARC_TO_ISO[raw]) return MARC_TO_ISO[raw]
+  // zh-Hans / zh-Hant style tags
+  if (raw.startsWith('zh-hans') || raw === 'zh-cn' || raw === 'zh-sg') {
+    return 'zh-Hans'
+  }
+  if (
+    raw.startsWith('zh-hant') ||
+    raw === 'zh-tw' ||
+    raw === 'zh-hk' ||
+    raw === 'zh-mo'
+  ) {
+    return 'zh-Hant'
+  }
+  const short = raw.split(/-/)[0]
+  if (BY_CODE.has(short)) return short
   if (MARC_TO_ISO[short]) return MARC_TO_ISO[short]
+  // Legacy stored value "zh"
+  if (short === 'zh') return 'zh-Hans'
   return short || 'other'
 }
 

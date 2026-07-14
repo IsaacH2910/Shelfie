@@ -20,7 +20,7 @@ import {
   bookHasCategory,
   collectCategories,
 } from '@/lib/categories'
-import { getLanguage } from '@/lib/languages'
+import { getLanguage, normalizeLanguageCode } from '@/lib/languages'
 import { normalizeIsbn, normalizeText } from '@/lib/duplicates'
 import { cn } from '@/lib/utils'
 
@@ -51,9 +51,9 @@ export default function LibraryPage() {
   const languagesPresent = useMemo(() => {
     const codes = new Set<string>()
     for (const book of books ?? []) {
-      if (book.language) codes.add(book.language)
+      if (book.language) codes.add(normalizeLanguageCode(book.language))
     }
-    return Array.from(codes)
+    return Array.from(codes).filter(Boolean)
   }, [books])
 
   const categoriesPresent = useMemo(
@@ -67,7 +67,11 @@ export default function LibraryPage() {
     let list = (books ?? []).filter((book) => {
       if (scope === 'mine' && book.created_by !== user?.id) return false
       if (scope === 'shared' && !book.household_id) return false
-      if (language !== 'all' && book.language !== language) return false
+      if (
+        language !== 'all' &&
+        normalizeLanguageCode(book.language) !== language
+      )
+        return false
       if (category !== 'all' && !bookHasCategory(book, category)) return false
       if (!q && !isbnQ) return true
       const matchesIsbn =
