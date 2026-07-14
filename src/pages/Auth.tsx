@@ -33,14 +33,6 @@ function GoogleIcon() {
   )
 }
 
-function AppleIcon() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden>
-      <path d="M17.05 12.54c-.03-2.6 2.12-3.85 2.22-3.91-1.21-1.77-3.1-2.01-3.77-2.04-1.6-.16-3.13.94-3.94.94-.81 0-2.07-.92-3.4-.9-1.75.03-3.36 1.02-4.26 2.58-1.82 3.15-.47 7.82 1.3 10.38.86 1.25 1.89 2.66 3.24 2.61 1.3-.05 1.79-.84 3.36-.84 1.57 0 2.01.84 3.39.81 1.4-.02 2.29-1.28 3.15-2.54.99-1.46 1.4-2.87 1.42-2.94-.03-.01-2.72-1.05-2.75-4.16ZM14.6 4.84c.72-.87 1.2-2.08 1.07-3.28-1.03.04-2.28.69-3.02 1.55-.66.77-1.24 2-1.08 3.18 1.15.09 2.32-.58 3.03-1.45Z" />
-    </svg>
-  )
-}
-
 export default function AuthPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
@@ -63,7 +55,7 @@ export default function AuthPage() {
 
   const redirectTo = window.location.origin
 
-  const handleOAuth = async (provider: 'google' | 'apple') => {
+  const handleOAuth = async (provider: 'google') => {
     setLoading('oauth')
     const { error } = await supabase.auth.signInWithOAuth({
       provider,
@@ -163,14 +155,6 @@ export default function AuthPage() {
               >
                 <GoogleIcon />
                 Continue with Google
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => handleOAuth('apple')}
-                disabled={loading !== null}
-              >
-                <AppleIcon />
-                Continue with Apple
               </Button>
             </div>
 
