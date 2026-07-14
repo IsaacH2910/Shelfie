@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, ScanBarcode, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { BookForm } from '@/components/BookForm'
 import type { OcrResult } from '@/components/CoverScanner'
 import { CoverImage } from '@/components/CoverImage'
@@ -72,6 +73,7 @@ export default function AddBookPage() {
   const [assist, setAssist] = useState<Assist>(() =>
     searchParams.get('scan') === 'barcode' ? 'barcode' : 'none',
   )
+  const [manualIsbn, setManualIsbn] = useState('')
   const [saving, setSaving] = useState(false)
   const [searching, setSearching] = useState(false)
   const [candidates, setCandidates] = useState<LookupResult[] | null>(null)
@@ -203,6 +205,28 @@ export default function AddBookPage() {
           <Suspense fallback={<ScannerFallback />}>
             <BarcodeScanner onResult={handleBarcode} onError={() => undefined} />
           </Suspense>
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault()
+              const value = manualIsbn.trim()
+              if (!value) return
+              handleBarcode(value)
+              setManualIsbn('')
+            }}
+          >
+            <Input
+              value={manualIsbn}
+              onChange={(e) => setManualIsbn(e.target.value)}
+              placeholder="Or type the ISBN, e.g. 9780452284241"
+              inputMode="numeric"
+              autoComplete="off"
+              className="flex-1"
+            />
+            <Button type="submit" variant="secondary" disabled={!manualIsbn.trim()}>
+              Look up
+            </Button>
+          </form>
           <Button
             variant="outline"
             className="w-full"
