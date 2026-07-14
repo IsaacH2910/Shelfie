@@ -9,6 +9,7 @@ import {
   Lock,
   MapPin,
   Pencil,
+  Tag,
   Trash2,
   Users,
 } from 'lucide-react'
@@ -49,6 +50,7 @@ function bookToDraft(book: Book): BookDraft {
     isbn: book.isbn ?? '',
     language: book.language ?? '',
     shelf_location: book.shelf_location ?? '',
+    categories: book.categories ?? [],
     notes: book.notes ?? '',
     cover_url: book.cover_url,
     source: book.source as BookDraft['source'],
@@ -268,6 +270,12 @@ export default function BookDetailPage() {
                 Private
               </Badge>
             )}
+            {(book.categories ?? []).map((label) => (
+              <Badge key={label.toLowerCase()} variant="outline" className="gap-1">
+                <Tag className="h-3 w-3" />
+                {label}
+              </Badge>
+            ))}
           </div>
 
           <dl className="space-y-2 pt-1 text-sm">

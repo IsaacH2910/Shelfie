@@ -16,6 +16,10 @@ import { BackendUnavailable } from '@/components/BackendUnavailable'
 import { EmptyState } from '@/components/EmptyState'
 import { useBooks } from '@/hooks/useBooks'
 import { useAuth } from '@/context/AuthProvider'
+import {
+  bookHasCategory,
+  collectCategories,
+} from '@/lib/categories'
 import { getLanguage } from '@/lib/languages'
 import { normalizeIsbn, normalizeText } from '@/lib/duplicates'
 import { cn } from '@/lib/utils'
@@ -41,6 +45,7 @@ export default function LibraryPage() {
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<Scope>('all')
   const [language, setLanguage] = useState('all')
+  const [category, setCategory] = useState('all')
   const [sort, setSort] = useState<Sort>('recent')
 
   const languagesPresent = useMemo(() => {
@@ -51,6 +56,11 @@ export default function LibraryPage() {
     return Array.from(codes)
   }, [books])
 
+  const categoriesPresent = useMemo(
+    () => collectCategories(books ?? []),
+    [books],
+  )
+
   const filtered = useMemo(() => {
     const q = normalizeText(query)
     const isbnQ = normalizeIsbn(query)
@@ -58,12 +68,16 @@ export default function LibraryPage() {
       if (scope === 'mine' && book.created_by !== user?.id) return false
       if (scope === 'shared' && !book.household_id) return false
       if (language !== 'all' && book.language !== language) return false
+      if (category !== 'all' && !bookHasCategory(book, category)) return false
       if (!q && !isbnQ) return true
       const matchesIsbn =
-        isbnQ.length > 0 &&
-        normalizeIsbn(book.isbn).includes(isbnQ)
+        isbnQ.length > 0 && normalizeIsbn(book.isbn).includes(isbnQ)
+      const matchesCategory = (book.categories ?? []).some((c) =>
+        normalizeText(c).includes(q),
+      )
       return (
         matchesIsbn ||
+        matchesCategory ||
         normalizeText(book.title).includes(q) ||
         normalizeText(book.author).includes(q) ||
         normalizeText(book.shelf_location).includes(q)
@@ -76,7 +90,7 @@ export default function LibraryPage() {
       return b.created_at.localeCompare(a.created_at)
     })
     return list
-  }, [books, query, scope, language, sort, user?.id])
+  }, [books, query, scope, language, category, sort, user?.id])
 
   const total = books?.length ?? 0
 
@@ -113,7 +127,7 @@ export default function LibraryPage() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, author, ISBN or shelf…"
+            placeholder="Search title, author, ISBN, shelf or category…"
             className="pl-9"
             type="search"
             data-testid="library-search"
@@ -153,6 +167,22 @@ export default function LibraryPage() {
                     </SelectItem>
                   )
                 })}
+              </SelectContent>
+            </Select>
+          ) : null}
+
+          {categoriesPresent.length > 0 ? (
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All categories</SelectItem>
+                {categoriesPresent.map((label) => (
+                  <SelectItem key={label.toLowerCase()} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           ) : null}

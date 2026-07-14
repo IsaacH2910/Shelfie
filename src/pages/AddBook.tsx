@@ -42,6 +42,7 @@ const EMPTY_DRAFT: BookDraft = {
   isbn: '',
   language: '',
   shelf_location: '',
+  categories: [],
   notes: '',
   cover_url: null,
   source: 'manual',

@@ -30,6 +30,7 @@ export type BookDraft = {
   isbn: string
   language: string
   shelf_location: string
+  categories: string[]
   notes: string
   cover_url: string | null
   source: BookSource

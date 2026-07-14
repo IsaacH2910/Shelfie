@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthProvider'
 import { useServerQueryResult } from '@/hooks/useServerQueryResult'
+import { normalizeCategories } from '@/lib/categories'
 import type { Book, BookDraft, BookInsert, Profile } from '@/types'
 
 export type BookWithCreator = Book & {
@@ -22,6 +23,7 @@ function draftToRow(draft: BookDraft, userId: string): BookInsert {
     isbn: draft.isbn.trim() || null,
     language: draft.language || null,
     shelf_location: draft.shelf_location.trim() || null,
+    categories: normalizeCategories(draft.categories),
     notes: draft.notes.trim() || null,
     cover_url: draft.cover_url,
     source: draft.source,

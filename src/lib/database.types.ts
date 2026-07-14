@@ -163,6 +163,7 @@ export interface Database {
           isbn: string | null
           language: string | null
           shelf_location: string | null
+          categories: string[]
           cover_url: string | null
           notes: string | null
           source: string
@@ -178,6 +179,7 @@ export interface Database {
           isbn?: string | null
           language?: string | null
           shelf_location?: string | null
+          categories?: string[]
           cover_url?: string | null
           notes?: string | null
           source?: string
@@ -193,6 +195,7 @@ export interface Database {
           isbn?: string | null
           language?: string | null
           shelf_location?: string | null
+          categories?: string[]
           cover_url?: string | null
           notes?: string | null
           source?: string

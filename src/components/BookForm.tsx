@@ -15,10 +15,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { LanguageSelect } from '@/components/LanguageSelect'
+import { CategoryInput } from '@/components/CategoryInput'
 import { CoverImage } from '@/components/CoverImage'
 import { CoverUpload } from '@/components/CoverUpload'
 import { DuplicateWarning } from '@/components/DuplicateWarning'
 import { Spinner } from '@/components/Spinner'
+import { collectCategories } from '@/lib/categories'
 import { findDuplicates, normalizeIsbn } from '@/lib/duplicates'
 import { lookupByIsbn } from '@/lib/bookLookup'
 import type { Book, BookDraft, HouseholdWithRole } from '@/types'
@@ -153,6 +155,10 @@ export function BookForm({
   }
 
   const canSubmit = value.title.trim().length > 0 && !submitting
+  const categorySuggestions = useMemo(
+    () => collectCategories(existingBooks),
+    [existingBooks],
+  )
 
   return (
     <form
@@ -270,6 +276,13 @@ export function BookForm({
           </div>
         </div>
       </div>
+
+      <CategoryInput
+        value={value.categories}
+        onChange={(categories) => patch({ categories })}
+        suggestions={categorySuggestions}
+        disabled={submitting}
+      />
 
       {households.length > 0 ? (
         <div className="rounded-xl border border-border p-3.5">

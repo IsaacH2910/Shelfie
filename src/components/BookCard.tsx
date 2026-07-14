@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Users } from 'lucide-react'
+import { MapPin, Tag, Users } from 'lucide-react'
 import { CoverImage } from '@/components/CoverImage'
 import { LanguageBadge } from '@/components/LanguageBadge'
 import type { BookWithCreator } from '@/hooks/useBooks'
 
 export function BookCard({ book }: { book: BookWithCreator }) {
+  const categories = book.categories ?? []
+
   return (
     <Link
       to={`/book/${book.id}`}
@@ -33,6 +35,20 @@ export function BookCard({ book }: { book: BookWithCreator }) {
         ) : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
           <LanguageBadge code={book.language} showLabel={false} />
+          {categories.slice(0, 2).map((label) => (
+            <span
+              key={label.toLowerCase()}
+              className="inline-flex max-w-full items-center gap-0.5 truncate text-xs text-muted-foreground"
+            >
+              <Tag className="h-3 w-3 shrink-0" />
+              <span className="truncate">{label}</span>
+            </span>
+          ))}
+          {categories.length > 2 ? (
+            <span className="text-xs text-muted-foreground">
+              +{categories.length - 2}
+            </span>
+          ) : null}
           {book.shelf_location ? (
             <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3 shrink-0" />
