@@ -357,14 +357,15 @@ async function lookupOpenLibrarySearch(isbn) {
   )
   const doc = data?.docs?.[0]
   if (!doc?.title) return null
-  const lang = doc.language?.[0] || ''
+  // Search API returns every translation language — do not use language[0].
+  let language = guessLanguage(doc.title)
+  language = sanitizeLanguage(language)
+  if (!languageMatchesTitle(language, doc.title)) language = ''
   return {
     title: doc.title,
     author: (doc.author_name || []).join(', '),
     isbn,
-    language: lang.startsWith('zh')
-      ? guessLanguage(doc.title) || 'zh-Hans'
-      : lang.slice(0, 2) || guessLanguage(doc.title),
+    language,
     cover_url: doc.cover_i
       ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
       : null,
