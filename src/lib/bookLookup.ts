@@ -12,7 +12,14 @@ export type LookupResult = {
   isbn: string
   language: string
   cover_url: string | null
-  source: 'google' | 'openlibrary' | 'isbnsearch' | 'isbn.tw' | 'openbd'
+  source:
+    | 'google'
+    | 'openlibrary'
+    | 'isbnsearch'
+    | 'isbn.tw'
+    | 'openbd'
+    | 'archive'
+    | 'wikipedia'
 }
 
 type GoogleVolume = {

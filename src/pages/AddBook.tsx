@@ -108,7 +108,7 @@ export default function AddBookPage() {
     if (isJapaneseClassificationCode(text) || isJapaneseClassificationCode(isbn)) {
       setAssist('none')
       toast.error(
-        'That barcode is a Japanese price code — scan the ISBN (starts with 978)',
+        'That barcode is a Japanese price code — scan the ISBN (starts with 978 or 979)',
       )
       return
     }
