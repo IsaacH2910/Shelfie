@@ -1,32 +1,38 @@
 # Manual E2E checklist
 
-Flows that need a real camera, HTTPS, or multiple physical devices.
+Flows that need a real camera, HTTPS, or multiple devices. Automated coverage lives in the Playwright specs in this folder (`npm run test:e2e`).
 
 ## Auth and sync
-- [ ] Sign up on Mac, sign in on phone (same Wi-Fi LAN URL) — library syncs
+
+- [ ] Sign up on one device, sign in on another — library syncs
 - [ ] Sign out and back in — data persists
 
-## Add book (Mac at home)
-- [ ] Manual entry with ISBN — auto-fill from Google Books
-- [ ] Barcode scan (requires HTTPS or localhost secure context)
-- [ ] Cover OCR with non-English language selected
-- [ ] Duplicate warning when adding same ISBN again
-- [ ] Same title in different languages — both appear, related editions on detail page
+## Add book
 
-## Bookshop (phone)
-- [ ] Search library by ISBN while in store
-- [ ] Scan ISBN from Library → duplicate toast if already owned
-- [ ] Add a new purchase on the spot
+- [ ] Manual entry with ISBN — auto-fill from lookup
+- [ ] Barcode scan (requires HTTPS or a secure context)
+- [ ] Cover OCR with a non-English language selected
+- [ ] Duplicate warning when adding the same ISBN again
+- [ ] Same title in different languages — both appear; related editions on the detail page
 
-## Database stopped (local dev)
-- [ ] Run `npm run db:stop` — library shows “Can't reach your library”, not stale books
-- [ ] Run `npm run db:start` — books reappear (data was never deleted)
+## On the go
+
+- [ ] Search the library by ISBN
+- [ ] Scan ISBN from Library — duplicate toast if already owned
+- [ ] Add a new book on the spot
+
+## Local database stopped
+
+- [ ] `npm run db:stop` — library shows “Can't reach your library”, not stale books
+- [ ] `npm run db:start` — books reappear (Docker volume was never wiped)
 
 ## Offline
+
 - [ ] Load library online, enable airplane mode — cached library still visible
-- [ ] Attempt add offline — fails with error (expected)
+- [ ] Attempt add offline — fails with an error (expected)
 
 ## PWA / deploy
-- [ ] Deploy to Vercel + Supabase cloud with HTTPS
-- [ ] Install to home screen on phone
-- [ ] Barcode scan works away from home Wi-Fi
+
+- [ ] Deploy with HTTPS (see [`docs/DEPLOY.md`](../docs/DEPLOY.md))
+- [ ] Install to home screen on a phone
+- [ ] Barcode scan works away from the home network

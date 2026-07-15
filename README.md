@@ -1,29 +1,24 @@
-# 📚 Shelfie
+# Shelfie
 
-A clean, cross‑device app to catalog the books you own — add them at home on your
-Mac, then check your shelf from your phone at the bookshop so you never buy a
-duplicate again.
+Catalog the books you own — add them at home, then check your shelf from your
+phone at the bookshop so you never buy a duplicate.
 
-- **Scan to add** — scan the ISBN barcode for instant title/author/cover, or snap
-  a photo of the cover and let OCR fill in the details (works across scripts —
-  Latin, Chinese, Japanese, and more).
-- **Worldwide ISBN lookup** — metadata comes from several free sources in
-  parallel, so editions bought anywhere (including Chinese and Japanese books
-  Google Books often misses) still resolve.
+- **Scan to add** — ISBN barcode for instant title/author/cover, or snap the cover
+  and let OCR fill in the details (Latin, Chinese, Japanese, and more).
+- **Worldwide ISBN lookup** — several free metadata sources in parallel, including
+  editions Google Books often misses.
 - **Shelf locations** — record where each book lives (e.g. _Living room · Shelf A3_).
-- **Multilingual** — every book has a language, and different‑language editions of
-  the same title are welcomed (and grouped), not blocked.
-- **Duplicate aware** — a gentle warning if you already own a copy, but you can
-  always add it anyway.
-- **Private + shared** — keep a private library and share a household collection
-  with family.
-- **Works offline** — your catalog is cached, so it loads even with weak signal.
-- **Installable PWA** — add it to your home screen on iOS, Android, or desktop.
+- **Multilingual** — every book has a language; different‑language editions of the
+  same title are welcomed and grouped, not blocked.
+- **Duplicate aware** — a warning if you already own a copy; you can still add it.
+- **Private + shared** — a private library and optional household collections.
+- **Works offline** — the catalog is cached for weak or no signal.
+- **Installable PWA** — add to home screen on iOS, Android, or desktop.
 
 ## Tech stack
 
 React 19 · TypeScript · Vite · Tailwind CSS · Radix UI · TanStack Query ·
-Supabase (Postgres + Auth + Storage) · ZXing (barcode) · Tesseract.js (OCR) ·
+Supabase (Postgres + Auth + Storage) · ZXing · Tesseract.js ·
 Vercel serverless (`/api/book-lookup`) · vite-plugin-pwa.
 
 ## Getting started
@@ -36,126 +31,95 @@ npm install
 
 ### 2. Start the local database
 
-The database, auth, and storage run locally in Docker via the Supabase CLI — no
-cloud account required, and everything lives in this repo. Make sure **Docker
-Desktop is running**, then:
+Requires **Docker Desktop** running:
 
 ```bash
 npm run db:start
 ```
 
-The first run downloads the Supabase images (a few minutes). It applies the
-migrations under [`supabase/migrations/`](supabase/migrations/) automatically
-and starts:
+This applies [`supabase/migrations/`](supabase/migrations/) and starts:
 
 - API — <http://localhost:54321>
-- Studio (browse your data) — <http://localhost:54323>
+- Studio — <http://localhost:54323>
 - Email inbox (magic-link testing) — <http://localhost:54324>
 
-A ready‑to‑use `.env.local` pointing at this local stack is already in place, so
-there's nothing else to configure. Stop the stack any time with `npm run db:stop`.
+Stop anytime with `npm run db:stop`.
 
-### 3. Run the app
+### 3. Configure env
+
+```bash
+cp .env.example .env.local
+```
+
+For local Supabase, fill in the URL and anon key printed by `npm run db:start`
+(also shown in `supabase status`).
+
+### 4. Run the app
 
 ```bash
 npm run dev
 ```
 
-Open <http://localhost:5173> and **sign up with email + password** (local email
-confirmation is off, so you're in immediately). Magic-link and Google/Apple sign‑in
-require real email/credentials, so they're for the deployed version.
-
-Vite also serves [`api/book-lookup.mjs`](api/book-lookup.mjs) at `/api/book-lookup`
-locally, so ISBN lookup behaves the same as on Vercel.
+Open <http://localhost:5173> and sign up with email + password (local email
+confirmation is off). Vite serves [`api/book-lookup.mjs`](api/book-lookup.mjs) at
+`/api/book-lookup` so ISBN lookup matches production.
 
 ## Scripts
 
-| Command             | Description                             |
-| ------------------- | --------------------------------------- |
-| `npm run dev`       | Start the dev server (also on LAN)      |
-| `npm run build`     | Type‑check and build for production     |
-| `npm run preview`   | Preview the production build locally    |
-| `npm run lint`      | Lint with oxlint                        |
-| `npm run test:e2e`  | Run Playwright end‑to‑end tests         |
-| `npm run db:start`  | Start local Supabase (Docker)           |
-| `npm run db:stop`   | Stop local Supabase                     |
-| `npm run db:reset`  | Recreate the DB and re‑apply migrations |
-| `npm run db:studio` | Open Supabase Studio                    |
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Dev server (LAN too) |
+| `npm run build` | Type-check and production build |
+| `npm run preview` | Preview the production build |
+| `npm run lint` | Lint with oxlint |
+| `npm run test:e2e` | Playwright end-to-end tests |
+| `npm run db:start` | Start local Supabase |
+| `npm run db:stop` | Stop local Supabase |
+| `npm run db:reset` | Recreate DB and re-apply migrations |
+| `npm run db:studio` | Open Supabase Studio |
 
-## Open it on your phone
+## Deploy
 
-### On the same Wi‑Fi (quick)
+For barcode scanning, PWA install, and use away from home Wi‑Fi you need **HTTPS**
+and a cloud (or self-hosted) database.
 
-With the database and `npm run dev` running, open the **Network URL** that Vite
-prints (e.g. `http://192.168.128.66:5173`) on your phone.
+See **[`docs/DEPLOY.md`](docs/DEPLOY.md)** for Supabase Cloud + Vercel, self-hosted
+database on a VPS, custom domains, backups, and troubleshooting.
 
-> The LAN address is baked into `.env.local` and the redirect URLs in
-> [`supabase/config.toml`](supabase/config.toml). If your Mac's IP changes, update
-> both and restart with `npm run db:stop && npm run db:start`.
+Quick version:
 
-Over a plain `http://` LAN address you can browse, search and add books manually,
-but **barcode/camera scanning, install‑to‑home‑screen and offline mode need HTTPS**
-(a secure context). For those, use the deployed version below.
-
-### Anywhere, including the bookshop (deploy)
-
-To use Shelfie on your phone away from home — with barcode scanning and install —
-host it with a cloud database and an HTTPS URL:
-
-1. Create a free project at [supabase.com](https://supabase.com).
-2. In **SQL Editor**, paste and run each file in
-   [`supabase/migrations/`](supabase/migrations/) in order.
-3. In **Authentication → Providers**, enable Email, Google and/or Apple; under
-   **URL Configuration** add your site and redirect URLs.
-4. Import the repo into [Vercel](https://vercel.com) and set `VITE_SUPABASE_URL`
-   and `VITE_SUPABASE_ANON_KEY` from **Project Settings → API**.
-   Optionally set `VITE_GOOGLE_BOOKS_API_KEY` for a higher Google Books quota.
-5. Deploy. [`vercel.json`](vercel.json) handles SPA routing while leaving `/api/*`
-   for the book‑lookup function; add the Vercel URL to Supabase's redirect list.
-
-Now the same URL works on every device over HTTPS, with the camera and PWA install
-enabled.
-
-**Detailed walkthrough:** see [`docs/DEPLOY.md`](docs/DEPLOY.md) for step-by-step
-instructions (Supabase Cloud + Vercel, **self-hosted database on your own VPS**, custom
-domains, backups, and troubleshooting).
+1. Create a [Supabase](https://supabase.com) project and run every file in
+   `supabase/migrations/` in order.
+2. Deploy this repo to [Vercel](https://vercel.com) with `VITE_SUPABASE_URL` and
+   `VITE_SUPABASE_ANON_KEY` (optional: `VITE_GOOGLE_BOOKS_API_KEY`).
+3. Add the Vercel URL to Supabase Auth redirect URLs.
 
 ## How it works
 
-- Each book row is **private** when `household_id` is null, or **shared** when it
-  points at a household you belong to. RLS ensures you only ever see your own books
-  plus those of households you're a member of.
-- ISBN lookups prefer the **`/api/book-lookup`** serverless route, which queries
-  Google Books, Open Library, openBD, isbn.tw, isbnsearch.org, and Internet Archive
-  in parallel and returns the richest hit — no country or publisher‑prefix
-  assumptions. If the API is unreachable, the browser falls back to Open Library
-  and Google Books directly. Missing covers fall back to Open Library's ISBN cover
-  endpoint.
-- Cover OCR uses Tesseract with language packs for every book language in the app;
-  the camera opens from the same tap that starts scanning (required on iOS Safari).
-- Cover art uses the lookup thumbnail when available; photos you take are uploaded
-  to Supabase Storage.
-- The catalog is cached for **offline browsing at the bookshop** (when your phone
-  has no signal). Stopping the database with `npm run db:stop` does **not** delete
-  your books — they stay in the Docker volume and come back when you run
-  `npm run db:start`. While the database is stopped and your browser is online,
-  the app shows **“Can't reach your library”** instead of stale cached records.
-  To permanently wipe local dev data, run `npm run db:reset`.
+- Books are **private** when `household_id` is null, or **shared** with a household
+  you belong to. RLS limits what each user can see.
+- ISBN lookups use **`/api/book-lookup`**, which queries Google Books, Open Library,
+  openBD, isbn.tw, isbnsearch.org, and Internet Archive in parallel. If the API is
+  unreachable, the browser falls back to Open Library and Google Books. Missing
+  covers fall back to Open Library’s ISBN cover endpoint.
+- Cover photos upload to Supabase Storage; OCR uses Tesseract language packs for
+  every language in the app.
+- The catalog is cached for offline browsing. `npm run db:stop` does **not** delete
+  local data (Docker volume). While the DB is down and the browser is online, the
+  app shows “Can't reach your library” instead of stale cache. Wipe local data with
+  `npm run db:reset`.
 
 ## Project structure
 
 ```
-api/
-  book-lookup.mjs   Worldwide ISBN metadata (Vercel + Vite dev)
-docs/
-  DEPLOY.md         Cloud / self-hosted deploy guide
+api/                Worldwide ISBN lookup (Vercel + Vite dev)
+docs/               Deploy guide
 src/
-  components/       UI primitives (ui/) and feature components
+  components/       UI and feature components
   context/          Auth provider
-  hooks/            Data hooks (books, households, profile)
-  lib/              Supabase client, book lookup, camera, OCR languages
-  pages/            Auth, Library, AddBook, BookDetail, Household, Settings, Join
-supabase/
-  migrations/       Database schema + RLS
-e2e/                Playwright tests
+  hooks/            Books, households, profile
+  lib/              Supabase, lookup, camera, OCR
+  pages/            App screens
+supabase/           Migrations + local config
+e2e/                Playwright tests + manual checklist
 ```
