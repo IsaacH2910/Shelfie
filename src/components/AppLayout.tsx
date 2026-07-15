@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom'
 import {
   BarChart3,
   BookMarked,
+  Download,
   Library,
   MapPin,
   Plus,
@@ -12,6 +13,7 @@ import {
 } from 'lucide-react'
 import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
 import { LoanReminders } from '@/components/LoanReminders'
+import { MoreNav } from '@/components/MoreNav'
 import { Onboarding } from '@/components/Onboarding'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { FullScreenLoader } from '@/components/Spinner'
@@ -81,7 +83,14 @@ export function AppLayout() {
             </NavLink>
           ))}
         </nav>
-        <div className="border-t border-border pt-4">
+        <div className="space-y-2 border-t border-border pt-4">
+          <Link
+            to="/settings#install"
+            className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-muted-foreground transition hover:bg-accent/60 hover:text-foreground"
+          >
+            <Download className="h-4 w-4" />
+            Download app
+          </Link>
           <div className="px-1">
             <ProfileMenu />
           </div>
@@ -104,7 +113,7 @@ export function AppLayout() {
       </main>
 
       {/* Mobile bottom navigation */}
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 items-center border-t border-border bg-background/90 px-2 pt-1.5 backdrop-blur-md md:hidden">
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-center border-t border-border bg-background/90 px-1 pt-1.5 backdrop-blur-md md:hidden">
         <BottomTab to="/" label="Library" icon={Library} end />
         <BottomTab to="/stats" label="Stats" icon={BarChart3} />
         <div className="flex items-center justify-center">
@@ -116,7 +125,8 @@ export function AppLayout() {
             <Plus className="h-6 w-6" />
           </Link>
         </div>
-        <BottomTab to="/settings" label="Settings" icon={Settings} />
+        <BottomTab to="/shop" label="Shop" icon={ShoppingBag} />
+        <MoreNav />
       </nav>
     </div>
   )

@@ -2,13 +2,12 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { BookOpen, Languages, LibraryBig, Sparkles } from 'lucide-react'
 import { CoverImage } from '@/components/CoverImage'
+import { QuickActions } from '@/components/QuickActions'
 import { progressPercent } from '@/lib/reading'
 import { normalizeLanguageCode } from '@/lib/languages'
 import type { BookWithCreator } from '@/hooks/useBooks'
 
 export function LibraryDashboard({ books }: { books: BookWithCreator[] }) {
-  if (books.length === 0) return null
-
   const authors = new Set(
     books.map((b) => b.author?.trim()).filter(Boolean) as string[],
   )
@@ -28,28 +27,32 @@ export function LibraryDashboard({ books }: { books: BookWithCreator[] }) {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-        <Stat
-          icon={<LibraryBig className="h-4 w-4" />}
-          label="Books"
-          value={String(books.length)}
-        />
-        <Stat
-          icon={<Sparkles className="h-4 w-4" />}
-          label="Authors"
-          value={String(authors.size)}
-        />
-        <Stat
-          icon={<Languages className="h-4 w-4" />}
-          label="Languages"
-          value={String(languages.size)}
-        />
-        <Stat
-          icon={<BookOpen className="h-4 w-4" />}
-          label="Finished"
-          value={String(finished)}
-        />
-      </div>
+      <QuickActions />
+
+      {books.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+          <Stat
+            icon={<LibraryBig className="h-4 w-4" />}
+            label="Books"
+            value={String(books.length)}
+          />
+          <Stat
+            icon={<Sparkles className="h-4 w-4" />}
+            label="Authors"
+            value={String(authors.size)}
+          />
+          <Stat
+            icon={<Languages className="h-4 w-4" />}
+            label="Languages"
+            value={String(languages.size)}
+          />
+          <Stat
+            icon={<BookOpen className="h-4 w-4" />}
+            label="Finished"
+            value={String(finished)}
+          />
+        </div>
+      ) : null}
 
       {currentlyReading.length > 0 ? (
         <section className="space-y-2">

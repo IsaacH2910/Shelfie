@@ -298,7 +298,7 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {!isBackendUnavailable && total > 0 ? (
+      {!isBackendUnavailable ? (
         <LibraryDashboard books={books ?? []} />
       ) : null}
 

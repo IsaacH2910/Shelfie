@@ -79,9 +79,11 @@ export default defineConfig({
         theme_color: '#4f46e5',
         background_color: '#faf9f7',
         display: 'standalone',
-        orientation: 'portrait',
+        // Allow phone + desktop install (portrait-only can block desktop PWAs).
+        orientation: 'any',
         start_url: '/',
         scope: '/',
+        categories: ['books', 'productivity', 'utilities'],
         icons: [
           { src: 'pwa-192x192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512x512.png', sizes: '512x512', type: 'image/png' },
@@ -89,7 +91,7 @@ export default defineConfig({
             src: 'pwa-512x512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'maskable',
+            purpose: 'any maskable',
           },
         ],
       },
@@ -121,6 +123,7 @@ export default defineConfig({
           },
         ],
       },
+      // Enable SW in `vite preview` / production; keep off during HMR.
       devOptions: { enabled: false },
     }),
   ],

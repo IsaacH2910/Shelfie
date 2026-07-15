@@ -3,14 +3,12 @@ import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
 import {
   Check,
-  Download,
   FolderOpen,
   Link2,
   LogOut,
   MapPin,
   Monitor,
   Moon,
-  Share,
   Sun,
   Tag,
   Bug,
@@ -28,11 +26,11 @@ import {
 import { TaxonomyManager } from '@/components/TaxonomyManager'
 import { ImportExportPanel } from '@/components/ImportExportPanel'
 import { CrashLogPanel } from '@/components/CrashLogPanel'
+import { InstallAppCard } from '@/components/InstallAppCard'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/context/AuthProvider'
 import { useProfile, useUpdateProfile } from '@/hooks/useProfile'
 import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
-import { usePwaInstall } from '@/hooks/usePwaInstall'
 import { collectCategories } from '@/lib/categories'
 import { DEFAULT_COLLECTIONS } from '@/lib/collections'
 import { collectShelves, SHELF_SEP } from '@/lib/shelves'
@@ -81,7 +79,6 @@ export default function SettingsPage() {
   const { data: profile } = useProfile()
   const updateProfile = useUpdateProfile()
   const { theme, setTheme } = useTheme()
-  const install = usePwaInstall()
   const [name, setName] = useState('')
   const { data: books } = useBooks()
   const taxonomy = useLibraryTaxonomy()
@@ -125,6 +122,8 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+
+      <InstallAppCard />
 
       <Card>
         <CardHeader>
@@ -346,34 +345,6 @@ export default function SettingsPage() {
           </div>
         </CardContent>
       </Card>
-
-      {!install.installed ? (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Install the app</CardTitle>
-            <CardDescription>
-              Add Shelfie to your home screen for quick access at the bookshop.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {install.canInstall ? (
-              <Button onClick={() => void install.promptInstall()}>
-                <Download className="h-4 w-4" />
-                Install Shelfie
-              </Button>
-            ) : install.isIos ? (
-              <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                Tap <Share className="inline h-4 w-4" /> then “Add to Home
-                Screen”.
-              </p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                Use your browser’s “Install app” option in the address bar.
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      ) : null}
 
       <Card>
         <CardHeader>
