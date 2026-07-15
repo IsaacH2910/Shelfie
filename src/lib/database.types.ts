@@ -14,18 +14,24 @@ export interface Database {
           id: string
           display_name: string
           avatar_url: string | null
+          category_labels: string[]
+          shelf_locations: string[]
           created_at: string
         }
         Insert: {
           id: string
           display_name: string
           avatar_url?: string | null
+          category_labels?: string[]
+          shelf_locations?: string[]
           created_at?: string
         }
         Update: {
           id?: string
           display_name?: string
           avatar_url?: string | null
+          category_labels?: string[]
+          shelf_locations?: string[]
           created_at?: string
         }
         Relationships: []
@@ -167,6 +173,12 @@ export interface Database {
           cover_url: string | null
           notes: string | null
           source: string
+          reading_status: string
+          rating: number | null
+          page_count: number | null
+          current_page: number | null
+          reading_started_at: string | null
+          reading_finished_at: string | null
           created_at: string
           updated_at: string
         }
@@ -183,6 +195,12 @@ export interface Database {
           cover_url?: string | null
           notes?: string | null
           source?: string
+          reading_status?: string
+          rating?: number | null
+          page_count?: number | null
+          current_page?: number | null
+          reading_started_at?: string | null
+          reading_finished_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -199,6 +217,12 @@ export interface Database {
           cover_url?: string | null
           notes?: string | null
           source?: string
+          reading_status?: string
+          rating?: number | null
+          page_count?: number | null
+          current_page?: number | null
+          reading_started_at?: string | null
+          reading_finished_at?: string | null
           created_at?: string
           updated_at?: string
         }

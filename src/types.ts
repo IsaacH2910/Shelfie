@@ -1,4 +1,5 @@
 import type { Database } from '@/lib/database.types'
+import type { ReadingStatus } from '@/lib/reading'
 
 export type Profile = Database['public']['Tables']['profiles']['Row']
 
@@ -36,4 +37,10 @@ export type BookDraft = {
   source: BookSource
   scope: BookScope
   household_id: string | null
+  reading_status: ReadingStatus
+  rating: number | null
+  page_count: number | null
+  current_page: number | null
+  reading_started_at: string | null
+  reading_finished_at: string | null
 }

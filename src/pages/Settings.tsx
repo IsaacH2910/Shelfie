@@ -1,6 +1,16 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, Download, LogOut, Monitor, Moon, Share, Sun } from 'lucide-react'
+import {
+  Check,
+  Download,
+  LogOut,
+  MapPin,
+  Monitor,
+  Moon,
+  Share,
+  Sun,
+  Tag,
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -11,10 +21,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import { TaxonomyManager } from '@/components/TaxonomyManager'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/context/AuthProvider'
 import { useProfile, useUpdateProfile } from '@/hooks/useProfile'
+import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
 import { usePwaInstall } from '@/hooks/usePwaInstall'
+import { collectCategories } from '@/lib/categories'
+import { collectShelves } from '@/lib/shelves'
+import { useBooks } from '@/hooks/useBooks'
 import { cn } from '@/lib/utils'
 
 const THEMES = [
@@ -23,6 +38,37 @@ const THEMES = [
   { value: 'system', label: 'System', icon: Monitor },
 ] as const
 
+function QuickStart({
+  label,
+  suggestions,
+  onPick,
+  disabled,
+}: {
+  label: string
+  suggestions: string[]
+  onPick: (label: string) => void
+  disabled?: boolean
+}) {
+  return (
+    <div className="space-y-1.5">
+      <p className="text-xs font-medium text-muted-foreground">{label}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {suggestions.map((item) => (
+          <button
+            key={item}
+            type="button"
+            disabled={disabled}
+            onClick={() => onPick(item)}
+            className="rounded-full border border-dashed border-border px-2.5 py-1 text-xs text-muted-foreground transition hover:border-primary/40 hover:bg-accent/40 hover:text-foreground"
+          >
+            + {item}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function SettingsPage() {
   const { user, signOut } = useAuth()
   const { data: profile } = useProfile()
@@ -30,10 +76,21 @@ export default function SettingsPage() {
   const { theme, setTheme } = useTheme()
   const install = usePwaInstall()
   const [name, setName] = useState('')
+  const { data: books } = useBooks()
+  const taxonomy = useLibraryTaxonomy()
 
   useEffect(() => {
     if (profile?.display_name) setName(profile.display_name)
   }, [profile?.display_name])
+
+  useEffect(() => {
+    const hash = window.location.hash.replace('#', '')
+    if (!hash) return
+    const el = document.getElementById(hash)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }, [])
 
   const saveName = () => {
     if (!name.trim()) return
@@ -45,6 +102,18 @@ export default function SettingsPage() {
       },
     )
   }
+
+  const orphanCategories = collectCategories(books ?? []).filter(
+    (c) =>
+      !taxonomy.managedCategories.some(
+        (m) => m.toLowerCase() === c.toLowerCase(),
+      ),
+  )
+  const orphanShelves = collectShelves(books ?? []).filter(
+    (s) =>
+      !taxonomy.managedShelves.some((m) => m.toLowerCase() === s.toLowerCase()),
+  )
+  const canImport = orphanCategories.length > 0 || orphanShelves.length > 0
 
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -78,6 +147,98 @@ export default function SettingsPage() {
               </Button>
             </div>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card id="shelves">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MapPin className="h-4 w-4 text-muted-foreground" />
+            Shelf locations
+          </CardTitle>
+          <CardDescription>
+            Name the places books live in your home. When you add a book, you’ll
+            pick one from a list — no typing every time.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {taxonomy.managedShelves.length === 0 ? (
+            <QuickStart
+              label="Try these"
+              suggestions={[
+                'Living room',
+                'Bedroom',
+                'Office',
+                'Kids room',
+              ]}
+              onPick={(label) => void taxonomy.addShelf(label)}
+              disabled={taxonomy.isSaving}
+            />
+          ) : null}
+          <TaxonomyManager
+            labels={taxonomy.managedShelves}
+            emptyHint="Add places like “Living room · Shelf A” or “Bedroom nightstand”."
+            addPlaceholder="e.g. Living room · Shelf A"
+            onAdd={taxonomy.addShelf}
+            onRename={taxonomy.renameShelf}
+            onRemove={taxonomy.removeShelf}
+            busy={taxonomy.isSaving}
+          />
+        </CardContent>
+      </Card>
+
+      <Card id="categories">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Tag className="h-4 w-4 text-muted-foreground" />
+            Categories
+          </CardTitle>
+          <CardDescription>
+            Labels you reuse across books — Fiction, Kids, To read, School…
+            Tap them on the add-book form; filter by them in your library.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {taxonomy.managedCategories.length === 0 ? (
+            <QuickStart
+              label="Try these"
+              suggestions={[
+                'Fiction',
+                'Non-fiction',
+                'Kids',
+                'To read',
+                'Reference',
+              ]}
+              onPick={(label) => void taxonomy.addCategory(label)}
+              disabled={taxonomy.isSaving}
+            />
+          ) : null}
+          <TaxonomyManager
+            labels={taxonomy.managedCategories}
+            emptyHint="Add a few categories you actually use. Keep the list short."
+            addPlaceholder="e.g. Fiction"
+            onAdd={taxonomy.addCategory}
+            onRename={taxonomy.renameCategory}
+            onRemove={taxonomy.removeCategory}
+            busy={taxonomy.isSaving}
+          />
+          {canImport ? (
+            <div className="rounded-lg bg-muted/60 px-3 py-2.5 text-sm text-muted-foreground">
+              Found {orphanCategories.length + orphanShelves.length} label
+              {orphanCategories.length + orphanShelves.length === 1
+                ? ''
+                : 's'}{' '}
+              already on books that aren’t in your lists yet.{' '}
+              <button
+                type="button"
+                className="font-medium text-primary hover:underline"
+                disabled={taxonomy.isSaving}
+                onClick={() => void taxonomy.importFromBooks()}
+              >
+                Import them
+              </button>
+            </div>
+          ) : null}
         </CardContent>
       </Card>
 

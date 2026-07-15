@@ -2,10 +2,19 @@ import { Link } from 'react-router-dom'
 import { MapPin, Tag, Users } from 'lucide-react'
 import { CoverImage } from '@/components/CoverImage'
 import { LanguageBadge } from '@/components/LanguageBadge'
+import { StatusBadge } from '@/components/StatusBadge'
+import { StarRating } from '@/components/StarRating'
+import { progressPercent } from '@/lib/reading'
 import type { BookWithCreator } from '@/hooks/useBooks'
 
 export function BookCard({ book }: { book: BookWithCreator }) {
   const categories = book.categories ?? []
+  const pct = progressPercent(book.current_page, book.page_count)
+  const showProgress =
+    (book.reading_status === 'reading' ||
+      book.reading_status === 'rereading' ||
+      book.reading_status === 'paused') &&
+    pct != null
 
   return (
     <Link
@@ -23,6 +32,14 @@ export function BookCard({ book }: { book: BookWithCreator }) {
             <Users className="h-3.5 w-3.5" />
           </span>
         ) : null}
+        {showProgress ? (
+          <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20">
+            <div
+              className="h-full bg-primary"
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+        ) : null}
       </div>
       <div className="min-w-0 px-0.5">
         <p className="truncate text-sm font-semibold leading-snug text-foreground">
@@ -34,8 +51,12 @@ export function BookCard({ book }: { book: BookWithCreator }) {
           </p>
         ) : null}
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          <StatusBadge status={book.reading_status} short />
           <LanguageBadge code={book.language} showLabel={false} />
-          {categories.slice(0, 2).map((label) => (
+          {book.rating ? (
+            <StarRating value={book.rating} size="sm" />
+          ) : null}
+          {categories.slice(0, 1).map((label) => (
             <span
               key={label.toLowerCase()}
               className="inline-flex max-w-full items-center gap-0.5 truncate text-xs text-muted-foreground"
@@ -44,11 +65,6 @@ export function BookCard({ book }: { book: BookWithCreator }) {
               <span className="truncate">{label}</span>
             </span>
           ))}
-          {categories.length > 2 ? (
-            <span className="text-xs text-muted-foreground">
-              +{categories.length - 2}
-            </span>
-          ) : null}
           {book.shelf_location ? (
             <span className="inline-flex items-center gap-0.5 text-xs text-muted-foreground">
               <MapPin className="h-3 w-3 shrink-0" />

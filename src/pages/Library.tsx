@@ -12,6 +12,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { BookCard } from '@/components/BookCard'
+import { LibraryDashboard } from '@/components/LibraryDashboard'
 import { BackendUnavailable } from '@/components/BackendUnavailable'
 import { EmptyState } from '@/components/EmptyState'
 import { useBooks } from '@/hooks/useBooks'
@@ -20,12 +21,19 @@ import {
   bookHasCategory,
   collectCategories,
 } from '@/lib/categories'
+import { collectShelves } from '@/lib/shelves'
+import {
+  READING_STATUSES,
+  READING_STATUS_META,
+  type ReadingStatus,
+} from '@/lib/reading'
 import { getLanguage, normalizeLanguageCode } from '@/lib/languages'
 import { normalizeIsbn, normalizeText } from '@/lib/duplicates'
 import { cn } from '@/lib/utils'
 
 type Scope = 'all' | 'mine' | 'shared'
-type Sort = 'recent' | 'title' | 'author'
+type Sort = 'recent' | 'title' | 'author' | 'rating'
+type StatusFilter = 'all' | ReadingStatus
 
 const SCOPES: { value: Scope; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -46,6 +54,8 @@ export default function LibraryPage() {
   const [scope, setScope] = useState<Scope>('all')
   const [language, setLanguage] = useState('all')
   const [category, setCategory] = useState('all')
+  const [shelf, setShelf] = useState('all')
+  const [status, setStatus] = useState<StatusFilter>('all')
   const [sort, setSort] = useState<Sort>('recent')
 
   const languagesPresent = useMemo(() => {
@@ -61,6 +71,19 @@ export default function LibraryPage() {
     [books],
   )
 
+  const shelvesPresent = useMemo(
+    () => collectShelves(books ?? []),
+    [books],
+  )
+
+  const statusesPresent = useMemo(() => {
+    const seen = new Set<string>()
+    for (const book of books ?? []) {
+      if (book.reading_status) seen.add(book.reading_status)
+    }
+    return READING_STATUSES.filter((s) => seen.has(s))
+  }, [books])
+
   const filtered = useMemo(() => {
     const q = normalizeText(query)
     const isbnQ = normalizeIsbn(query)
@@ -73,6 +96,12 @@ export default function LibraryPage() {
       )
         return false
       if (category !== 'all' && !bookHasCategory(book, category)) return false
+      if (
+        shelf !== 'all' &&
+        (book.shelf_location ?? '').toLowerCase() !== shelf.toLowerCase()
+      )
+        return false
+      if (status !== 'all' && book.reading_status !== status) return false
       if (!q && !isbnQ) return true
       const matchesIsbn =
         isbnQ.length > 0 && normalizeIsbn(book.isbn).includes(isbnQ)
@@ -91,10 +120,12 @@ export default function LibraryPage() {
       if (sort === 'title') return a.title.localeCompare(b.title)
       if (sort === 'author')
         return (a.author ?? '').localeCompare(b.author ?? '')
+      if (sort === 'rating')
+        return (b.rating ?? 0) - (a.rating ?? 0)
       return b.created_at.localeCompare(a.created_at)
     })
     return list
-  }, [books, query, scope, language, category, sort, user?.id])
+  }, [books, query, scope, language, category, shelf, status, sort, user?.id])
 
   const total = books?.length ?? 0
 
@@ -124,6 +155,10 @@ export default function LibraryPage() {
           </Button>
         </div>
       </div>
+
+      {!isBackendUnavailable && total > 0 ? (
+        <LibraryDashboard books={books ?? []} />
+      ) : null}
 
       <div className="space-y-3">
         <div className="relative">
@@ -155,6 +190,25 @@ export default function LibraryPage() {
               </button>
             ))}
           </div>
+
+          {statusesPresent.length > 0 ? (
+            <Select
+              value={status}
+              onValueChange={(v) => setStatus(v as StatusFilter)}
+            >
+              <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                {statusesPresent.map((value) => (
+                  <SelectItem key={value} value={value}>
+                    {READING_STATUS_META[value].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
 
           {languagesPresent.length > 1 ? (
             <Select value={language} onValueChange={setLanguage}>
@@ -191,6 +245,22 @@ export default function LibraryPage() {
             </Select>
           ) : null}
 
+          {shelvesPresent.length > 0 ? (
+            <Select value={shelf} onValueChange={setShelf}>
+              <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                <SelectValue placeholder="Shelf" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All shelves</SelectItem>
+                {shelvesPresent.map((label) => (
+                  <SelectItem key={label.toLowerCase()} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+
           <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
             <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
               <SelectValue />
@@ -199,6 +269,7 @@ export default function LibraryPage() {
               <SelectItem value="recent">Recently added</SelectItem>
               <SelectItem value="title">Title A–Z</SelectItem>
               <SelectItem value="author">Author A–Z</SelectItem>
+              <SelectItem value="rating">Highest rated</SelectItem>
             </SelectContent>
           </Select>
         </div>

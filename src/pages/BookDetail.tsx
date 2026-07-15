@@ -27,10 +27,13 @@ import {
 } from '@/components/ui/dialog'
 import { CoverImage } from '@/components/CoverImage'
 import { LanguageBadge } from '@/components/LanguageBadge'
+import { StatusBadge } from '@/components/StatusBadge'
+import { StarRating } from '@/components/StarRating'
 import { BookForm } from '@/components/BookForm'
 import { BookCard } from '@/components/BookCard'
 import { FullScreenLoader } from '@/components/Spinner'
 import { EmptyState } from '@/components/EmptyState'
+import { formatProgress, normalizeReadingStatus } from '@/lib/reading'
 import {
   useBooks,
   useDeleteBook,
@@ -56,6 +59,12 @@ function bookToDraft(book: Book): BookDraft {
     source: book.source as BookDraft['source'],
     scope: book.household_id ? 'household' : 'private',
     household_id: book.household_id,
+    reading_status: normalizeReadingStatus(book.reading_status),
+    rating: book.rating,
+    page_count: book.page_count,
+    current_page: book.current_page,
+    reading_started_at: book.reading_started_at,
+    reading_finished_at: book.reading_finished_at,
   }
 }
 
@@ -258,6 +267,7 @@ export default function BookDetailPage() {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <StatusBadge status={book.reading_status} />
             <LanguageBadge code={book.language} />
             {book.household_id ? (
               <Badge variant="secondary" className="gap-1">
@@ -277,6 +287,21 @@ export default function BookDetailPage() {
               </Badge>
             ))}
           </div>
+
+          {book.rating ? (
+            <div className="flex items-center gap-2">
+              <StarRating value={book.rating} />
+              <span className="text-sm text-muted-foreground">
+                {book.rating} / 5
+              </span>
+            </div>
+          ) : null}
+
+          {formatProgress(book.current_page, book.page_count) ? (
+            <p className="text-sm text-muted-foreground">
+              {formatProgress(book.current_page, book.page_count)}
+            </p>
+          ) : null}
 
           <dl className="space-y-2 pt-1 text-sm">
             {book.shelf_location ? (
@@ -299,6 +324,30 @@ export default function BookDetailPage() {
                   : ''}
               </dd>
             </div>
+            {book.reading_started_at ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <CalendarDays className="h-4 w-4" />
+                <dd>
+                  Started{' '}
+                  {new Date(book.reading_started_at).toLocaleDateString(
+                    undefined,
+                    { year: 'numeric', month: 'short', day: 'numeric' },
+                  )}
+                </dd>
+              </div>
+            ) : null}
+            {book.reading_finished_at ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <CalendarDays className="h-4 w-4" />
+                <dd>
+                  Finished{' '}
+                  {new Date(book.reading_finished_at).toLocaleDateString(
+                    undefined,
+                    { year: 'numeric', month: 'short', day: 'numeric' },
+                  )}
+                </dd>
+              </div>
+            ) : null}
             {book.isbn ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <BookText className="h-4 w-4 shrink-0" />

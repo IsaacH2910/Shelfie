@@ -3,6 +3,11 @@ import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthProvider'
 import { useServerQueryResult } from '@/hooks/useServerQueryResult'
 import { normalizeCategories } from '@/lib/categories'
+import {
+  normalizeRating,
+  normalizeReadingStatus,
+  readingTimestampsForStatus,
+} from '@/lib/reading'
 import type { Book, BookDraft, BookInsert, Profile } from '@/types'
 
 export type BookWithCreator = Book & {
@@ -15,6 +20,23 @@ function booksKey(userId: string | undefined) {
 
 function draftToRow(draft: BookDraft, userId: string): BookInsert {
   const householdId = draft.scope === 'household' ? draft.household_id : null
+  const reading_status = normalizeReadingStatus(draft.reading_status)
+  const timestamps = readingTimestampsForStatus(reading_status, {
+    reading_started_at: draft.reading_started_at,
+    reading_finished_at: draft.reading_finished_at,
+  })
+  let current_page = draft.current_page
+  let page_count = draft.page_count
+  if (page_count != null && page_count <= 0) page_count = null
+  if (current_page != null && current_page < 0) current_page = null
+  if (
+    current_page != null &&
+    page_count != null &&
+    current_page > page_count
+  ) {
+    current_page = page_count
+  }
+
   return {
     created_by: userId,
     household_id: householdId,
@@ -27,6 +49,12 @@ function draftToRow(draft: BookDraft, userId: string): BookInsert {
     notes: draft.notes.trim() || null,
     cover_url: draft.cover_url,
     source: draft.source,
+    reading_status,
+    rating: normalizeRating(draft.rating),
+    page_count,
+    current_page,
+    reading_started_at: timestamps.reading_started_at,
+    reading_finished_at: timestamps.reading_finished_at,
   }
 }
 
@@ -41,7 +69,11 @@ export function useBooks() {
         .select('*, creator:profiles(display_name, avatar_url)')
         .order('created_at', { ascending: false })
       if (error) throw error
-      return (data ?? []) as unknown as BookWithCreator[]
+      return ((data ?? []) as unknown as BookWithCreator[]).map((book) => ({
+        ...book,
+        rating: normalizeRating(book.rating as number | string | null),
+        reading_status: normalizeReadingStatus(book.reading_status),
+      }))
     },
   })
   const wrapped = useServerQueryResult(result)

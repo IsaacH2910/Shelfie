@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Barcode, MapPin, RefreshCw, Users } from 'lucide-react'
+import { Barcode, RefreshCw, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,11 +16,16 @@ import {
 } from '@/components/ui/select'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { CategoryInput } from '@/components/CategoryInput'
+import { ShelfSelect } from '@/components/ShelfSelect'
+import { ReadingStatusSelect } from '@/components/ReadingStatusSelect'
+import { ReadingProgressFields } from '@/components/ReadingProgressFields'
+import { StarRating } from '@/components/StarRating'
 import { CoverImage } from '@/components/CoverImage'
 import { CoverUpload } from '@/components/CoverUpload'
 import { DuplicateWarning } from '@/components/DuplicateWarning'
 import { Spinner } from '@/components/Spinner'
-import { collectCategories } from '@/lib/categories'
+import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
+import { readingTimestampsForStatus } from '@/lib/reading'
 import {
   findDuplicates,
   isLookupIsbn,
@@ -175,10 +180,7 @@ export function BookForm({
   }
 
   const canSubmit = value.title.trim().length > 0 && !submitting
-  const categorySuggestions = useMemo(
-    () => collectCategories(existingBooks),
-    [existingBooks],
-  )
+  const { categoryOptions, shelfOptions } = useLibraryTaxonomy()
 
   return (
     <form
@@ -272,36 +274,58 @@ export function BookForm({
         </p>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="language">Language</Label>
-          <LanguageSelect
-            id="language"
-            value={value.language}
-            onChange={(language) => patch({ language })}
-          />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="shelf">Shelf location</Label>
-          <div className="relative">
-            <MapPin className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              id="shelf"
-              className="pl-9"
-              value={value.shelf_location}
-              onChange={(e) => patch({ shelf_location: e.target.value })}
-              placeholder="e.g. Living room · Shelf A3"
-              autoComplete="off"
-            />
-          </div>
-        </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="language">Language</Label>
+        <LanguageSelect
+          id="language"
+          value={value.language}
+          onChange={(language) => patch({ language })}
+        />
       </div>
+
+      <ShelfSelect
+        value={value.shelf_location}
+        onChange={(shelf_location) => patch({ shelf_location })}
+        options={shelfOptions}
+        disabled={submitting}
+      />
 
       <CategoryInput
         value={value.categories}
         onChange={(categories) => patch({ categories })}
-        suggestions={categorySuggestions}
+        options={categoryOptions}
         disabled={submitting}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <ReadingStatusSelect
+          value={value.reading_status}
+          onChange={(reading_status) => {
+            const stamps = readingTimestampsForStatus(reading_status, value)
+            patch({ reading_status, ...stamps })
+          }}
+          disabled={submitting}
+        />
+        <div className="space-y-1.5">
+          <Label>Your rating</Label>
+          <div className="flex h-11 items-center">
+            <StarRating
+              value={value.rating}
+              onChange={(rating) => patch({ rating })}
+              disabled={submitting}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Tap a star; tap again for a half star, once more to clear.
+          </p>
+        </div>
+      </div>
+
+      <ReadingProgressFields
+        currentPage={value.current_page}
+        pageCount={value.page_count}
+        disabled={submitting}
+        onChange={(progress) => patch(progress)}
       />
 
       {households.length > 0 ? (

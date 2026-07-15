@@ -44,6 +44,12 @@ const EMPTY_DRAFT: BookDraft = {
   source: 'manual',
   scope: 'private',
   household_id: null,
+  reading_status: 'unread',
+  rating: null,
+  page_count: null,
+  current_page: null,
+  reading_started_at: null,
+  reading_finished_at: null,
 }
 
 function buildQuery(text: string): string {
