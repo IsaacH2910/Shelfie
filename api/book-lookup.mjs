@@ -20,6 +20,12 @@ function httpsCover(url) {
   return String(url).replace(/^http:\/\//, 'https://')
 }
 
+function openLibraryIsbnCover(isbn) {
+  const digits = normalizeIsbn(isbn)
+  if (digits.length < 10) return null
+  return `https://covers.openlibrary.org/b/isbn/${digits}-L.jpg?default=false`
+}
+
 function decodeEntities(text) {
   return String(text ?? '')
     .replace(/&amp;/g, '&')
@@ -214,6 +220,7 @@ function mergeResults(results) {
     cover_url:
       primary.cover_url ||
       usable.find((r) => r.cover_url)?.cover_url ||
+      openLibraryIsbnCover(primary.isbn) ||
       null,
     source: primary.source,
   }
@@ -367,7 +374,7 @@ async function lookupOpenLibrarySearch(isbn) {
     isbn,
     language,
     cover_url: doc.cover_i
-      ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
+      ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg?default=false`
       : null,
     source: 'openlibrary',
   }

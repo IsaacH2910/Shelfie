@@ -40,6 +40,19 @@ function httpsCover(url?: string): string | null {
   return url.replace(/^http:\/\//, 'https://')
 }
 
+/** Open Library ISBN cover; `default=false` returns 404 when missing. */
+export function openLibraryIsbnCover(isbn: string): string | null {
+  const digits = normalizeIsbn(isbn)
+  if (digits.length < 10) return null
+  return `https://covers.openlibrary.org/b/isbn/${digits}-L.jpg?default=false`
+}
+
+function withCoverFallback(result: LookupResult): LookupResult {
+  if (result.cover_url) return result
+  const cover = openLibraryIsbnCover(result.isbn)
+  return cover ? { ...result, cover_url: cover } : result
+}
+
 function isbnFromGoogle(volume: GoogleVolume): string {
   const ids = volume.volumeInfo?.industryIdentifiers ?? []
   const isbn13 = ids.find((i) => i.type === 'ISBN_13')?.identifier
@@ -166,8 +179,8 @@ async function lookupOpenLibrarySearch(
     ),
     language: normalizeLanguageCode(match.language?.[0]),
     cover_url: match.cover_i
-      ? `https://covers.openlibrary.org/b/id/${match.cover_i}-M.jpg`
-      : null,
+      ? `https://covers.openlibrary.org/b/id/${match.cover_i}-M.jpg?default=false`
+      : openLibraryIsbnCover(isbn),
     source: 'openlibrary',
   }
 }
@@ -278,10 +291,10 @@ export async function lookupByIsbn(
     if (signal?.aborted) return null
     const result = await lookupOneIsbn(isbn, signal)
     if (result) {
-      return {
+      return withCoverFallback({
         ...result,
         isbn: result.isbn || toLookupIsbn(rawIsbn),
-      }
+      })
     }
   }
   return null
@@ -311,8 +324,8 @@ async function searchOpenLibrary(
       isbn: toLookupIsbn(doc.isbn?.[0] ?? ''),
       language: normalizeLanguageCode(doc.language?.[0]),
       cover_url: doc.cover_i
-        ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg`
-        : null,
+        ? `https://covers.openlibrary.org/b/id/${doc.cover_i}-M.jpg?default=false`
+        : openLibraryIsbnCover(doc.isbn?.[0] ?? ''),
       source: 'openlibrary',
     })
   }
@@ -346,6 +359,6 @@ export async function searchBooks(
     seen.add(key)
     results.push(mapped)
   }
-  if (results.length > 0) return results
-  return searchOpenLibrary(trimmed, signal)
+  if (results.length > 0) return results.map(withCoverFallback)
+  return (await searchOpenLibrary(trimmed, signal)).map(withCoverFallback)
 }

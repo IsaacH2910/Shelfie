@@ -35,11 +35,10 @@ const APP_TO_TESSERACT: Record<string, string> = {
 }
 
 /**
- * Broad multi-script pack for unknown / mixed covers. First use downloads
- * several models; later runs reuse the browser cache.
+ * Practical multi-script pack for unknown / mixed covers.
+ * Kept small so the first download finishes reliably on mobile.
  */
-export const AUTO_OCR_TESSERACT =
-  'eng+chi_sim+chi_tra+jpn+kor+rus+ara+hin+tha+ell+heb+vie'
+export const AUTO_OCR_TESSERACT = 'eng+chi_sim+chi_tra+jpn'
 
 export type OcrLanguageOption = {
   code: string
@@ -57,7 +56,7 @@ export const OCR_LANGUAGES: OcrLanguageOption[] = [
   {
     code: 'auto',
     tesseract: AUTO_OCR_TESSERACT,
-    label: 'Auto (all common scripts)',
+    label: 'Auto (EN · 中文 · 日本語)',
   },
   ...LANGUAGES.filter((language) => language.code !== 'other')
     .map((language) => {

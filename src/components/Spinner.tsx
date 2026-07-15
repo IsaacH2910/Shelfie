@@ -5,10 +5,11 @@ export function Spinner({ className }: { className?: string }) {
   return <Loader2 className={cn('h-5 w-5 animate-spin', className)} />
 }
 
-export function FullScreenLoader() {
+export function FullScreenLoader({ label = 'Loading…' }: { label?: string }) {
   return (
-    <div className="flex min-h-[60vh] items-center justify-center">
-      <Spinner className="h-6 w-6 text-muted-foreground" />
+    <div className="flex min-h-[60vh] flex-col items-center justify-center gap-3 bg-background px-4">
+      <Spinner className="h-7 w-7 text-primary" />
+      <p className="text-sm text-muted-foreground">{label}</p>
     </div>
   )
 }

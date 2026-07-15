@@ -12,6 +12,11 @@ import {
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/Spinner'
 import {
+  friendlyCameraError,
+  openCameraStream,
+  stopStream,
+} from '@/lib/camera'
+import {
   AUTO_OCR_TESSERACT,
   OCR_LANGUAGES,
   resolveTesseractLanguage,
@@ -23,25 +28,61 @@ export type OcrResult = {
   previewUrl: string
 }
 
-function stopStream(stream: MediaStream | null) {
-  stream?.getTracks().forEach((track) => track.stop())
+/** Upscale + light contrast so thin cover text is easier for Tesseract. */
+async function preprocessForOcr(blob: Blob): Promise<Blob> {
+  try {
+    const bitmap = await createImageBitmap(blob)
+    const longest = Math.max(bitmap.width, bitmap.height)
+    const scale = longest < 1200 ? Math.min(2.2, 1400 / longest) : 1
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.floor(bitmap.width * scale))
+    canvas.height = Math.max(1, Math.floor(bitmap.height * scale))
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return blob
+    ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height)
+    bitmap.close()
+
+    const image = ctx.getImageData(0, 0, canvas.width, canvas.height)
+    const data = image.data
+    for (let i = 0; i < data.length; i += 4) {
+      const gray =
+        0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
+      const boosted = Math.max(0, Math.min(255, (gray - 128) * 1.35 + 128))
+      data[i] = boosted
+      data[i + 1] = boosted
+      data[i + 2] = boosted
+    }
+    ctx.putImageData(image, 0, 0)
+
+    const out = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92),
+    )
+    return out ?? blob
+  } catch {
+    return blob
+  }
 }
 
 export function CoverScanner({
   onRecognized,
   onError,
   defaultLanguage,
+  initialStream = null,
 }: {
   onRecognized: (result: OcrResult) => void
   onError?: (message: string) => void
   defaultLanguage?: string
+  /** Stream opened from the parent tap (Snap the cover). */
+  initialStream?: MediaStream | null
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const streamRef = useRef<MediaStream | null>(null)
+  const ownsStreamRef = useRef(false)
   const [progress, setProgress] = useState<number | null>(null)
+  const [progressLabel, setProgressLabel] = useState('Reading cover…')
   const [preview, setPreview] = useState<string | null>(null)
-  const [cameraOn, setCameraOn] = useState(false)
+  const [cameraOn, setCameraOn] = useState(Boolean(initialStream))
   const [startingCamera, setStartingCamera] = useState(false)
   const [ocrLanguage, setOcrLanguage] = useState(() =>
     defaultLanguage
@@ -51,10 +92,20 @@ export function CoverScanner({
 
   useEffect(() => {
     return () => {
-      stopStream(streamRef.current)
+      if (ownsStreamRef.current) stopStream(streamRef.current)
       streamRef.current = null
+      ownsStreamRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!initialStream) return
+    if (ownsStreamRef.current) stopStream(streamRef.current)
+    streamRef.current = initialStream
+    ownsStreamRef.current = false
+    setCameraOn(true)
+    setPreview(null)
+  }, [initialStream])
 
   useEffect(() => {
     if (!cameraOn) return
@@ -63,21 +114,45 @@ export function CoverScanner({
     if (!video || !stream) return
     video.srcObject = stream
     video.setAttribute('playsinline', 'true')
+    video.muted = true
     void video.play().catch(() => undefined)
+    return () => {
+      video.srcObject = null
+    }
   }, [cameraOn])
 
   const runOcr = async (file: Blob, previewUrl: string) => {
     setPreview(previewUrl)
     setProgress(0)
+    setProgressLabel('Preparing image…')
     try {
-      const { data } = await Tesseract.recognize(file, ocrLanguage, {
+      const prepared = await preprocessForOcr(file)
+      setProgressLabel('Downloading language data…')
+      const { data } = await Tesseract.recognize(prepared, ocrLanguage, {
         logger: (m: { status: string; progress: number }) => {
-          if (m.status === 'recognizing text') {
-            setProgress(Math.round(m.progress * 100))
+          const pct = Math.round((m.progress || 0) * 100)
+          if (
+            m.status === 'loading language traineddata' ||
+            m.status === 'loading tesseract core' ||
+            m.status === 'initializing api' ||
+            m.status === 'initializing tesseract'
+          ) {
+            setProgressLabel('Downloading language data…')
+            setProgress(pct)
+          } else if (m.status === 'recognizing text') {
+            setProgressLabel('Reading cover…')
+            setProgress(pct)
           }
         },
       })
-      onRecognized({ text: data.text ?? '', blob: file, previewUrl })
+      const text = (data.text ?? '').trim()
+      if (!text) {
+        onError?.(
+          'Could not read any text from that cover. Try a brighter, sharper photo, or pick the cover language.',
+        )
+        return
+      }
+      onRecognized({ text, blob: file, previewUrl })
     } catch (err) {
       onError?.(
         err instanceof Error ? err.message : 'Could not read the cover',
@@ -93,37 +168,17 @@ export function CoverScanner({
   }
 
   const startCamera = () => {
-    if (!navigator.mediaDevices?.getUserMedia) {
-      onError?.('This browser cannot access the camera.')
-      return
-    }
     setStartingCamera(true)
     void (async () => {
       try {
-        stopStream(streamRef.current)
-        let stream: MediaStream
-        try {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: {
-              facingMode: { ideal: 'environment' },
-              width: { ideal: 1920 },
-              height: { ideal: 1080 },
-            },
-          })
-        } catch {
-          stream = await navigator.mediaDevices.getUserMedia({
-            audio: false,
-            video: true,
-          })
-        }
+        if (ownsStreamRef.current) stopStream(streamRef.current)
+        const stream = await openCameraStream()
         streamRef.current = stream
+        ownsStreamRef.current = true
         setCameraOn(true)
         setPreview(null)
       } catch (err) {
-        onError?.(
-          err instanceof Error ? err.message : 'Unable to access the camera',
-        )
+        onError?.(friendlyCameraError(err))
       } finally {
         setStartingCamera(false)
       }
@@ -131,8 +186,9 @@ export function CoverScanner({
   }
 
   const stopCamera = () => {
-    stopStream(streamRef.current)
+    if (ownsStreamRef.current) stopStream(streamRef.current)
     streamRef.current = null
+    ownsStreamRef.current = false
     setCameraOn(false)
   }
 
@@ -149,7 +205,11 @@ export function CoverScanner({
       canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92),
     )
     if (!blob) return
-    stopCamera()
+    // Capture keeps the blob; release the live camera.
+    if (ownsStreamRef.current) stopStream(streamRef.current)
+    streamRef.current = null
+    ownsStreamRef.current = false
+    setCameraOn(false)
     const previewUrl = URL.createObjectURL(blob)
     await runOcr(blob, previewUrl)
   }
@@ -177,7 +237,7 @@ export function CoverScanner({
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          Use Auto for mixed or unknown scripts, or pick the cover language for
+          Auto covers English + Chinese + Japanese. Pick the cover language for
           faster, more accurate reading.
         </p>
       </div>
@@ -269,7 +329,7 @@ export function CoverScanner({
       {recognizing ? (
         <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
           <Spinner className="h-4 w-4" />
-          Reading cover… {progress}%
+          {progressLabel} {progress}%
         </div>
       ) : preview && !cameraOn ? (
         <div className="flex gap-2">

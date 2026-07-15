@@ -10,12 +10,11 @@ import {
 import { Camera, CameraOff } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/Spinner'
-
-const VIDEO_CONSTRAINTS: MediaTrackConstraints = {
-  facingMode: { ideal: 'environment' },
-  width: { ideal: 1920 },
-  height: { ideal: 1080 },
-}
+import {
+  friendlyCameraError,
+  openCameraStream,
+  stopStream,
+} from '@/lib/camera'
 
 const ZXING_FORMATS = [
   BarcodeFormat.EAN_13,
@@ -41,29 +40,6 @@ function getBarcodeDetector(): BarcodeDetectorCtor | null {
     window as Window & { BarcodeDetector?: BarcodeDetectorCtor }
   ).BarcodeDetector
   return typeof ctor === 'function' ? ctor : null
-}
-
-function friendlyCameraError(err: unknown): string {
-  const name = err instanceof DOMException ? err.name : ''
-  const message = err instanceof Error ? err.message : ''
-
-  if (name === 'NotAllowedError' || /not allowed/i.test(message)) {
-    return 'Camera permission was blocked. On iPhone: Settings → Safari → Camera → Allow, then tap Try again. Or aA → Website Settings → Camera → Allow.'
-  }
-  if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return 'No camera was found on this device.'
-  }
-  if (name === 'NotReadableError' || name === 'TrackStartError') {
-    return 'The camera is in use by another app. Close it and try again.'
-  }
-  if (!window.isSecureContext) {
-    return 'Camera needs HTTPS. Open the Vercel link (https://…), not a local http:// address.'
-  }
-  return message || 'Unable to access the camera'
-}
-
-function stopStream(stream: MediaStream | null) {
-  stream?.getTracks().forEach((track) => track.stop())
 }
 
 function waitForVideoDimensions(
@@ -98,20 +74,6 @@ function waitForVideoDimensions(
     video.addEventListener('loadeddata', onMeta)
     tick()
   })
-}
-
-async function openCameraStream(): Promise<MediaStream> {
-  try {
-    return await navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: VIDEO_CONSTRAINTS,
-    })
-  } catch {
-    return navigator.mediaDevices.getUserMedia({
-      audio: false,
-      video: true,
-    })
-  }
 }
 
 function createZxingReader() {
@@ -204,9 +166,12 @@ function drawCroppedFrame(
 export function BarcodeScanner({
   onResult,
   onError,
+  /** Stream opened from the parent tap (Scan barcode) so iOS only needs one gesture. */
+  initialStream = null,
 }: {
   onResult: (text: string) => void
   onError?: (message: string) => void
+  initialStream?: MediaStream | null
 }) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -219,9 +184,11 @@ export function BarcodeScanner({
   const rotationIndexRef = useRef(0)
   const readerRef = useRef<MultiFormatReader | null>(null)
   const detectorRef = useRef<BarcodeDetectorLike | null>(null)
+  const startLoopRef = useRef<() => void>(() => undefined)
+  const ownsStreamRef = useRef(false)
   const [status, setStatus] = useState<
     'idle' | 'starting' | 'scanning' | 'error'
-  >('idle')
+  >(initialStream ? 'starting' : 'idle')
   const [errorMessage, setErrorMessage] = useState('')
 
   onResultRef.current = onResult
@@ -235,23 +202,90 @@ export function BarcodeScanner({
     busyRef.current = false
   }
 
+  const releaseStream = (force = false) => {
+    if (force || ownsStreamRef.current) {
+      stopStream(streamRef.current)
+    }
+    streamRef.current = null
+    ownsStreamRef.current = false
+  }
+
   const emitResult = (text: string) => {
     const trimmed = text.trim()
     if (!trimmed || firedRef.current) return
     firedRef.current = true
     stopLoop()
     onResultRef.current(trimmed)
-    stopStream(streamRef.current)
-    streamRef.current = null
+    releaseStream(true)
+  }
+
+  const attachStream = async (stream: MediaStream, own: boolean) => {
+    const video = videoRef.current
+    if (!video) {
+      if (own) stopStream(stream)
+      return
+    }
+
+    stopLoop()
+    releaseStream(false)
+    streamRef.current = stream
+    ownsStreamRef.current = own
+    firedRef.current = false
+    rotationIndexRef.current = 0
+    setStatus('starting')
+    setErrorMessage('')
+
+    try {
+      video.srcObject = stream
+      video.setAttribute('playsinline', 'true')
+      video.muted = true
+      await video.play().catch(() => undefined)
+      await waitForVideoDimensions(video)
+
+      const Detector = getBarcodeDetector()
+      detectorRef.current = Detector
+        ? new Detector({
+            formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
+          })
+        : null
+      readerRef.current = createZxingReader()
+
+      setStatus('scanning')
+      startLoopRef.current()
+    } catch (err: unknown) {
+      releaseStream(own)
+      const message = friendlyCameraError(err)
+      setStatus('error')
+      setErrorMessage(message)
+      onErrorRef.current?.(message)
+    }
   }
 
   useEffect(() => {
     return () => {
       stopLoop()
-      stopStream(streamRef.current)
-      streamRef.current = null
+      releaseStream(false)
+      if (videoRef.current) videoRef.current.srcObject = null
     }
   }, [])
+
+  useEffect(() => {
+    if (!initialStream) return
+    let cancelled = false
+    void (async () => {
+      await attachStream(initialStream, false)
+      if (cancelled) {
+        stopLoop()
+        if (videoRef.current) videoRef.current.srcObject = null
+      }
+    })()
+    return () => {
+      cancelled = true
+      stopLoop()
+      if (videoRef.current) videoRef.current.srcObject = null
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialStream])
 
   const scanFrame = async () => {
     const video = videoRef.current
@@ -300,11 +334,10 @@ export function BarcodeScanner({
     }
     tick()
   }
+  startLoopRef.current = startLoop
 
-  // getUserMedia must start from a tap on iOS Safari — not from useEffect.
+  // Fallback if the parent could not open the camera in the same tap.
   const startCamera = () => {
-    const video = videoRef.current
-    if (!video) return
     if (!navigator.mediaDevices?.getUserMedia) {
       const message = 'This browser cannot access the camera.'
       setStatus('error')
@@ -313,42 +346,14 @@ export function BarcodeScanner({
       return
     }
 
-    stopLoop()
-    stopStream(streamRef.current)
-    streamRef.current = null
-    firedRef.current = false
-    rotationIndexRef.current = 0
     setStatus('starting')
     setErrorMessage('')
-
     void (async () => {
       try {
         const stream = await openCameraStream()
-        if (!videoRef.current) {
-          stopStream(stream)
-          return
-        }
-
-        streamRef.current = stream
-        video.srcObject = stream
-        video.setAttribute('playsinline', 'true')
-        video.muted = true
-        await video.play().catch(() => undefined)
-        await waitForVideoDimensions(video)
-
-        const Detector = getBarcodeDetector()
-        detectorRef.current = Detector
-          ? new Detector({
-              formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
-            })
-          : null
-        readerRef.current = createZxingReader()
-
-        setStatus('scanning')
-        startLoop()
+        await attachStream(stream, true)
       } catch (err: unknown) {
-        stopStream(streamRef.current)
-        streamRef.current = null
+        releaseStream(true)
         const message = friendlyCameraError(err)
         setStatus('error')
         setErrorMessage(message)

@@ -4,10 +4,10 @@ import { useAuth } from '@/context/AuthProvider'
 import { AppLayout } from '@/components/AppLayout'
 import { FullScreenLoader } from '@/components/Spinner'
 import { REDIRECT_KEY } from '@/lib/constants'
+import AddBookPage from '@/pages/AddBook'
 
 const AuthPage = lazy(() => import('@/pages/Auth'))
 const LibraryPage = lazy(() => import('@/pages/Library'))
-const AddBookPage = lazy(() => import('@/pages/AddBook'))
 const BookDetailPage = lazy(() => import('@/pages/BookDetail'))
 const HouseholdPage = lazy(() => import('@/pages/Household'))
 const SettingsPage = lazy(() => import('@/pages/Settings'))
@@ -23,7 +23,7 @@ function ProtectedRoutes() {
     }
   }, [loading, session, location])
 
-  if (loading) return <FullScreenLoader />
+  if (loading) return <FullScreenLoader label="Signing you in…" />
   if (!session) return <Navigate to="/auth" replace />
   return <AppLayout />
 }

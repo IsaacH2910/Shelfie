@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { BookText } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -30,6 +30,11 @@ export function CoverImage({
   className?: string
 }) {
   const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setFailed(false)
+  }, [url])
+
   const showImage = url && !failed
 
   return (

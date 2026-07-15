@@ -5,7 +5,11 @@ Mac, then check your shelf from your phone at the bookshop so you never buy a
 duplicate again.
 
 - **Scan to add** — scan the ISBN barcode for instant title/author/cover, or snap
-  a photo of the cover and let OCR fill in the details.
+  a photo of the cover and let OCR fill in the details (works across scripts —
+  Latin, Chinese, Japanese, and more).
+- **Worldwide ISBN lookup** — metadata comes from several free sources in
+  parallel, so editions bought anywhere (including Chinese and Japanese books
+  Google Books often misses) still resolve.
 - **Shelf locations** — record where each book lives (e.g. _Living room · Shelf A3_).
 - **Multilingual** — every book has a language, and different‑language editions of
   the same title are welcomed (and grouped), not blocked.
@@ -20,7 +24,7 @@ duplicate again.
 
 React 19 · TypeScript · Vite · Tailwind CSS · Radix UI · TanStack Query ·
 Supabase (Postgres + Auth + Storage) · ZXing (barcode) · Tesseract.js (OCR) ·
-vite-plugin-pwa.
+Vercel serverless (`/api/book-lookup`) · vite-plugin-pwa.
 
 ## Getting started
 
@@ -40,9 +44,9 @@ Desktop is running**, then:
 npm run db:start
 ```
 
-The first run downloads the Supabase images (a few minutes). It applies
-[`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql)
-automatically and starts:
+The first run downloads the Supabase images (a few minutes). It applies the
+migrations under [`supabase/migrations/`](supabase/migrations/) automatically
+and starts:
 
 - API — <http://localhost:54321>
 - Studio (browse your data) — <http://localhost:54323>
@@ -61,18 +65,22 @@ Open <http://localhost:5173> and **sign up with email + password** (local email
 confirmation is off, so you're in immediately). Magic-link and Google/Apple sign‑in
 require real email/credentials, so they're for the deployed version.
 
+Vite also serves [`api/book-lookup.mjs`](api/book-lookup.mjs) at `/api/book-lookup`
+locally, so ISBN lookup behaves the same as on Vercel.
+
 ## Scripts
 
-| Command            | Description                          |
-| ------------------ | ------------------------------------ |
-| `npm run dev`      | Start the dev server (also on LAN)   |
-| `npm run build`    | Type‑check and build for production   |
-| `npm run preview`  | Preview the production build locally |
-| `npm run lint`     | Lint with oxlint                     |
-| `npm run db:start` | Start local Supabase (Docker)        |
-| `npm run db:stop`  | Stop local Supabase                  |
-| `npm run db:reset` | Recreate the DB and re‑apply migrations |
-| `npm run db:studio`| Open Supabase Studio                 |
+| Command             | Description                             |
+| ------------------- | --------------------------------------- |
+| `npm run dev`       | Start the dev server (also on LAN)      |
+| `npm run build`     | Type‑check and build for production     |
+| `npm run preview`   | Preview the production build locally    |
+| `npm run lint`      | Lint with oxlint                        |
+| `npm run test:e2e`  | Run Playwright end‑to‑end tests         |
+| `npm run db:start`  | Start local Supabase (Docker)           |
+| `npm run db:stop`   | Stop local Supabase                     |
+| `npm run db:reset`  | Recreate the DB and re‑apply migrations |
+| `npm run db:studio` | Open Supabase Studio                    |
 
 ## Open it on your phone
 
@@ -95,14 +103,15 @@ To use Shelfie on your phone away from home — with barcode scanning and instal
 host it with a cloud database and an HTTPS URL:
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. In **SQL Editor**, paste and run
-   [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql).
+2. In **SQL Editor**, paste and run each file in
+   [`supabase/migrations/`](supabase/migrations/) in order.
 3. In **Authentication → Providers**, enable Email, Google and/or Apple; under
    **URL Configuration** add your site and redirect URLs.
 4. Import the repo into [Vercel](https://vercel.com) and set `VITE_SUPABASE_URL`
    and `VITE_SUPABASE_ANON_KEY` from **Project Settings → API**.
-5. Deploy. [`vercel.json`](vercel.json) handles SPA routing; add the Vercel URL to
-   Supabase's redirect list.
+   Optionally set `VITE_GOOGLE_BOOKS_API_KEY` for a higher Google Books quota.
+5. Deploy. [`vercel.json`](vercel.json) handles SPA routing while leaving `/api/*`
+   for the book‑lookup function; add the Vercel URL to Supabase's redirect list.
 
 Now the same URL works on every device over HTTPS, with the camera and PWA install
 enabled.
@@ -116,8 +125,14 @@ domains, backups, and troubleshooting).
 - Each book row is **private** when `household_id` is null, or **shared** when it
   points at a household you belong to. RLS ensures you only ever see your own books
   plus those of households you're a member of.
-- ISBN lookups hit **Google Books** first and fall back to **Open Library**; both
-  are free and support many languages.
+- ISBN lookups prefer the **`/api/book-lookup`** serverless route, which queries
+  Google Books, Open Library, openBD, isbn.tw, isbnsearch.org, and Internet Archive
+  in parallel and returns the richest hit — no country or publisher‑prefix
+  assumptions. If the API is unreachable, the browser falls back to Open Library
+  and Google Books directly. Missing covers fall back to Open Library's ISBN cover
+  endpoint.
+- Cover OCR uses Tesseract with language packs for every book language in the app;
+  the camera opens from the same tap that starts scanning (required on iOS Safari).
 - Cover art uses the lookup thumbnail when available; photos you take are uploaded
   to Supabase Storage.
 - The catalog is cached for **offline browsing at the bookshop** (when your phone
@@ -130,12 +145,17 @@ domains, backups, and troubleshooting).
 ## Project structure
 
 ```
+api/
+  book-lookup.mjs   Worldwide ISBN metadata (Vercel + Vite dev)
+docs/
+  DEPLOY.md         Cloud / self-hosted deploy guide
 src/
   components/       UI primitives (ui/) and feature components
   context/          Auth provider
   hooks/            Data hooks (books, households, profile)
-  lib/              Supabase client, book lookup, duplicates, languages
+  lib/              Supabase client, book lookup, camera, OCR languages
   pages/            Auth, Library, AddBook, BookDetail, Household, Settings, Join
 supabase/
   migrations/       Database schema + RLS
+e2e/                Playwright tests
 ```

@@ -1,11 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { ArrowLeft, ScanBarcode, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BookForm } from '@/components/BookForm'
-import type { OcrResult } from '@/components/CoverScanner'
+import { BarcodeScanner } from '@/components/BarcodeScanner'
+import { CoverScanner, type OcrResult } from '@/components/CoverScanner'
 import { CoverImage } from '@/components/CoverImage'
 import { LanguageBadge } from '@/components/LanguageBadge'
 import { Spinner } from '@/components/Spinner'
@@ -14,6 +15,9 @@ import { useHouseholds } from '@/hooks/useHouseholds'
 import { useAuth } from '@/context/AuthProvider'
 import { searchBooks, type LookupResult } from '@/lib/bookLookup'
 import { findDuplicates, normalizeIsbn, toLookupIsbn } from '@/lib/duplicates'
+import { friendlyCameraError, openCameraStream, stopStream } from '@/lib/camera'
+import { uploadCover } from '@/lib/storage'
+import type { BookDraft } from '@/types'
 
 function isJapaneseClassificationCode(isbn: string): boolean {
   const digits = normalizeIsbn(isbn)
@@ -22,25 +26,6 @@ function isJapaneseClassificationCode(isbn: string): boolean {
     digits.startsWith('19') &&
     !digits.startsWith('978') &&
     !digits.startsWith('979')
-  )
-}
-import { uploadCover } from '@/lib/storage'
-import type { BookDraft } from '@/types'
-
-const BarcodeScanner = lazy(() =>
-  import('@/components/BarcodeScanner').then((m) => ({
-    default: m.BarcodeScanner,
-  })),
-)
-const CoverScanner = lazy(() =>
-  import('@/components/CoverScanner').then((m) => ({ default: m.CoverScanner })),
-)
-
-function ScannerFallback() {
-  return (
-    <div className="flex items-center justify-center py-12 text-muted-foreground">
-      <Spinner className="h-6 w-6" />
-    </div>
   )
 }
 
@@ -88,6 +73,9 @@ export default function AddBookPage() {
   const [searching, setSearching] = useState(false)
   const [candidates, setCandidates] = useState<LookupResult[] | null>(null)
   const [captured, setCaptured] = useState<OcrResult | null>(null)
+  const [barcodeStream, setBarcodeStream] = useState<MediaStream | null>(null)
+  const [coverStream, setCoverStream] = useState<MediaStream | null>(null)
+  const [openingCamera, setOpeningCamera] = useState(false)
 
   const existingBooks = useMemo(() => books ?? [], [books])
 
@@ -97,16 +85,62 @@ export default function AddBookPage() {
     }
   }, [searchParams])
 
-  const closePhoto = () => {
+  useEffect(() => {
+    return () => {
+      stopStream(barcodeStream)
+      stopStream(coverStream)
+    }
+    // Only on unmount — streams are owned by scanners while assist is open.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  const closeAssist = () => {
+    stopStream(barcodeStream)
+    stopStream(coverStream)
+    setBarcodeStream(null)
+    setCoverStream(null)
+    setOpeningCamera(false)
     setAssist('none')
     setCandidates(null)
+  }
+
+  const openBarcode = () => {
+    setOpeningCamera(true)
+    setAssist('barcode')
+    void (async () => {
+      try {
+        const stream = await openCameraStream()
+        setBarcodeStream(stream)
+      } catch (err) {
+        toast.error(friendlyCameraError(err))
+        setBarcodeStream(null)
+      } finally {
+        setOpeningCamera(false)
+      }
+    })()
+  }
+
+  const openCover = () => {
+    setOpeningCamera(true)
+    setAssist('photo')
+    void (async () => {
+      try {
+        const stream = await openCameraStream()
+        setCoverStream(stream)
+      } catch (err) {
+        toast.error(friendlyCameraError(err))
+        setCoverStream(null)
+      } finally {
+        setOpeningCamera(false)
+      }
+    })()
   }
 
   // Barcode scanned → check duplicates, then drop ISBN into form for auto-lookup.
   const handleBarcode = (text: string) => {
     const isbn = toLookupIsbn(text)
     if (isJapaneseClassificationCode(text) || isJapaneseClassificationCode(isbn)) {
-      setAssist('none')
+      closeAssist()
       toast.error(
         'That barcode is a Japanese price code — scan the ISBN (starts with 978 or 979)',
       )
@@ -118,7 +152,7 @@ export default function AddBookPage() {
         isbn: normalizeIsbn(text),
         source: 'barcode',
       }))
-      setAssist('none')
+      closeAssist()
       toast.error('That barcode does not look like an ISBN — check the digits')
       return
     }
@@ -143,6 +177,8 @@ export default function AddBookPage() {
       })
     }
     setDraft((d) => ({ ...d, isbn, source: 'barcode' }))
+    stopStream(barcodeStream)
+    setBarcodeStream(null)
     setAssist('none')
     toast.success('Barcode captured — looking it up')
   }
@@ -150,11 +186,24 @@ export default function AddBookPage() {
   const handleOcr = async (result: OcrResult) => {
     setCaptured(result)
     setSearching(true)
+    const query = buildQuery(result.text)
     try {
-      const found = await searchBooks(buildQuery(result.text))
+      if (query.length < 3) {
+        setCandidates([])
+        toast.info(
+          'Read some text, but not enough to search — use your photo or edit the form.',
+          { description: result.text.slice(0, 80) },
+        )
+        return
+      }
+      const found = await searchBooks(query)
       setCandidates(found)
       if (found.length === 0) {
-        toast.info('No match found — you can still save your photo.')
+        toast.info('No match found — you can still save your photo.', {
+          description: query,
+        })
+      } else {
+        toast.success(`Found ${found.length} possible match${found.length === 1 ? '' : 'es'}`)
       }
     } finally {
       setSearching(false)
@@ -171,7 +220,7 @@ export default function AddBookPage() {
       cover_url: result.cover_url ?? captured?.previewUrl ?? null,
       source: 'ocr',
     }))
-    closePhoto()
+    closeAssist()
   }
 
   const useMyPhoto = () => {
@@ -180,7 +229,7 @@ export default function AddBookPage() {
       cover_url: captured?.previewUrl ?? null,
       source: 'ocr',
     }))
-    closePhoto()
+    closeAssist()
   }
 
   const handleSave = async () => {
@@ -209,7 +258,7 @@ export default function AddBookPage() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => (assist === 'none' ? navigate(-1) : closePhoto())}
+          onClick={() => (assist === 'none' ? navigate(-1) : closeAssist())}
           aria-label="Back"
         >
           <ArrowLeft className="h-5 w-5" />
@@ -219,9 +268,18 @@ export default function AddBookPage() {
 
       {assist === 'barcode' ? (
         <div className="space-y-3">
-          <Suspense fallback={<ScannerFallback />}>
-            <BarcodeScanner onResult={handleBarcode} onError={() => undefined} />
-          </Suspense>
+          {openingCamera && !barcodeStream ? (
+            <div className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-2xl bg-black text-white/90">
+              <Spinner className="h-6 w-6" />
+              <p className="text-sm">Starting camera…</p>
+            </div>
+          ) : (
+            <BarcodeScanner
+              initialStream={barcodeStream}
+              onResult={handleBarcode}
+              onError={() => undefined}
+            />
+          )}
           <form
             className="flex gap-2"
             onSubmit={(e) => {
@@ -244,11 +302,7 @@ export default function AddBookPage() {
               Look up
             </Button>
           </form>
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={() => setAssist('none')}
-          >
+          <Button variant="outline" className="w-full" onClick={closeAssist}>
             <X className="h-4 w-4" />
             Cancel scanning
           </Button>
@@ -257,17 +311,23 @@ export default function AddBookPage() {
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <p className="text-sm font-medium">Snap the cover</p>
-            <Button variant="ghost" size="sm" onClick={closePhoto}>
+            <Button variant="ghost" size="sm" onClick={closeAssist}>
               Cancel
             </Button>
           </div>
-          <Suspense fallback={<ScannerFallback />}>
+          {openingCamera && !coverStream ? (
+            <div className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-2xl bg-muted text-muted-foreground">
+              <Spinner className="h-6 w-6" />
+              <p className="text-sm">Starting camera…</p>
+            </div>
+          ) : (
             <CoverScanner
+              initialStream={coverStream}
               defaultLanguage={draft.language}
               onRecognized={handleOcr}
               onError={(m) => toast.error(m)}
             />
-          </Suspense>
+          )}
 
           {searching ? (
             <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
@@ -323,7 +383,7 @@ export default function AddBookPage() {
           <div className="grid grid-cols-2 gap-3">
             <button
               type="button"
-              onClick={() => setAssist('barcode')}
+              onClick={openBarcode}
               className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-5 text-center transition hover:border-primary/50 hover:bg-accent/40 active:scale-[0.98]"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -334,7 +394,7 @@ export default function AddBookPage() {
             </button>
             <button
               type="button"
-              onClick={() => setAssist('photo')}
+              onClick={openCover}
               className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-5 text-center transition hover:border-primary/50 hover:bg-accent/40 active:scale-[0.98]"
             >
               <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
