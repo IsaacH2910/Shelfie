@@ -48,7 +48,7 @@ export function CategoryInput({
         <div className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
           No categories yet.{' '}
           <Link
-            to="/settings#categories"
+            to="/organize#categories"
             className="font-medium text-primary hover:underline"
           >
             Create some in Settings
@@ -88,7 +88,7 @@ export function CategoryInput({
       <p className="text-xs text-muted-foreground">
         Tap to select. Manage the list in{' '}
         <Link
-          to="/settings#categories"
+          to="/organize#categories"
           className="font-medium text-primary hover:underline"
         >
           Settings

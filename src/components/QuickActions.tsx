@@ -50,7 +50,7 @@ const ACTIONS = [
     icon: BarChart3,
   },
   {
-    to: '/settings#collections',
+    to: '/organize#collections',
     label: 'Collections',
     hint: 'Lists & labels',
     icon: FolderOpen,
@@ -68,7 +68,7 @@ const ACTIONS = [
     icon: Users,
   },
   {
-    to: '/settings#install',
+    to: '/download',
     label: 'Download',
     hint: 'Install the app',
     icon: Download,

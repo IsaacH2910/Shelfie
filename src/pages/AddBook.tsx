@@ -328,7 +328,7 @@ export default function AddBookPage() {
       }
       await createBook.mutateAsync({ ...draft, cover_url: cover })
       toast.success('Added to your library')
-      navigate('/')
+      navigate('/library')
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Could not save the book',

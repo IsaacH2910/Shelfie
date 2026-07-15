@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import type { ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   BookPlus,
@@ -23,7 +24,6 @@ import {
 } from '@/components/ui/select'
 import { BookCard } from '@/components/BookCard'
 import { VirtualBookGrid } from '@/components/VirtualBookGrid'
-import { LibraryDashboard } from '@/components/LibraryDashboard'
 import { BackendUnavailable } from '@/components/BackendUnavailable'
 import { EmptyState } from '@/components/EmptyState'
 import {
@@ -66,6 +66,7 @@ const SCOPES: { value: Scope; label: string }[] = [
 ]
 
 export default function LibraryPage() {
+  const [searchParams] = useSearchParams()
   const {
     data: books,
     isLoading,
@@ -90,6 +91,31 @@ export default function LibraryPage() {
   const [sort, setSort] = useState<Sort>('recent')
   const [selecting, setSelecting] = useState(false)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    const s = searchParams.get('status')
+    if (s && (READING_STATUSES as readonly string[]).includes(s)) {
+      setStatus(s as StatusFilter)
+    }
+    const o = searchParams.get('ownership')
+    if (
+      o === 'owned' ||
+      o === 'wishlist' ||
+      o === 'want_to_buy' ||
+      o === 'favorites'
+    ) {
+      setOwnership(o)
+    }
+    const sortParam = searchParams.get('sort')
+    if (
+      sortParam === 'recent' ||
+      sortParam === 'title' ||
+      sortParam === 'author' ||
+      sortParam === 'rating'
+    ) {
+      setSort(sortParam)
+    }
+  }, [searchParams])
 
   const languagesPresent = useMemo(() => {
     const codes = new Set<string>()
@@ -251,7 +277,7 @@ export default function LibraryPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5 animate-in">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Library</h1>
@@ -281,12 +307,6 @@ export default function LibraryPage() {
               </>
             )}
           </Button>
-          <Button asChild variant="outline" size="sm" className="md:hidden">
-            <Link to="/add?scan=barcode">
-              <ScanBarcode className="h-4 w-4" />
-              Scan ISBN
-            </Link>
-          </Button>
           <Button asChild className="hidden md:inline-flex">
             <Link to="/add">
               <BookPlus className="h-4 w-4" />
@@ -296,43 +316,99 @@ export default function LibraryPage() {
         </div>
       </div>
 
-      {!isBackendUnavailable ? (
-        <LibraryDashboard books={books ?? []} />
-      ) : null}
-
       <div className="space-y-3">
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, author, ISBN, series, shelf…"
+            placeholder="Filter this list…"
             className="pl-9"
             type="search"
             data-testid="library-search"
           />
+          <Link
+            to="/search"
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md px-2 py-1 text-xs font-medium text-primary hover:bg-accent"
+          >
+            Spotlight
+          </Link>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex gap-1 overflow-x-auto pb-0.5">
-            {(
-              [
-                { value: 'all' as const, label: 'All' },
-                { value: 'owned' as const, label: 'Owned' },
-                { value: 'wishlist' as const, label: 'Wishlist' },
-                { value: 'want_to_buy' as const, label: 'Want' },
-                { value: 'favorites' as const, label: 'Favorites' },
-              ] as const
-            ).map((option) => (
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+          {(
+            [
+              { value: 'all' as const, label: 'All' },
+              { value: 'owned' as const, label: 'Owned' },
+              { value: 'wishlist' as const, label: 'Wishlist' },
+              { value: 'want_to_buy' as const, label: 'Want' },
+              { value: 'favorites' as const, label: 'Favorites' },
+            ] as const
+          ).map((option) => (
+            <Chip
+              key={option.value}
+              active={ownership === option.value}
+              onClick={() => setOwnership(option.value)}
+            >
+              {option.label}
+            </Chip>
+          ))}
+        </div>
+
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5 no-scrollbar">
+          <Chip active={status === 'all'} onClick={() => setStatus('all')}>
+            Any status
+          </Chip>
+          {(statusesPresent.length > 0
+            ? statusesPresent
+            : READING_STATUSES
+          ).map((value) => (
+            <Chip
+              key={value}
+              active={status === value}
+              onClick={() => setStatus(value)}
+            >
+              {READING_STATUS_META[value].label}
+            </Chip>
+          ))}
+          {languagesPresent.map((code) => {
+            const lang = getLanguage(code)
+            return (
+              <Chip
+                key={code}
+                active={language === code}
+                onClick={() =>
+                  setLanguage((prev) => (prev === code ? 'all' : code))
+                }
+              >
+                {lang ? `${lang.flag} ${lang.name}` : code}
+              </Chip>
+            )
+          })}
+          {categoriesPresent.slice(0, 8).map((label) => (
+            <Chip
+              key={label}
+              active={category === label}
+              onClick={() =>
+                setCategory((prev) => (prev === label ? 'all' : label))
+              }
+            >
+              {label}
+            </Chip>
+          ))}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg bg-muted p-1">
+            {SCOPES.map((option) => (
               <button
                 key={option.value}
-                type="button"
-                onClick={() => setOwnership(option.value)}
+                onClick={() => setScope(option.value)}
                 className={cn(
-                  'shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
-                  ownership === option.value
-                    ? 'border-primary bg-primary/10 text-primary'
-                    : 'border-border text-muted-foreground hover:text-foreground',
+                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                  scope === option.value
+                    ? 'bg-background text-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground',
                 )}
               >
                 {option.label}
@@ -340,123 +416,49 @@ export default function LibraryPage() {
             ))}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-lg bg-muted p-1">
-              {SCOPES.map((option) => (
-                <button
-                  key={option.value}
-                  onClick={() => setScope(option.value)}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    scope === option.value
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-
-            <Select
-              value={status}
-              onValueChange={(v) => setStatus(v as StatusFilter)}
-            >
+          {collectionsPresent.length > 0 ? (
+            <Select value={collection} onValueChange={setCollection}>
               <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                <SelectValue placeholder="Status" />
+                <SelectValue placeholder="Collection" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All statuses</SelectItem>
-                {(statusesPresent.length > 0
-                  ? statusesPresent
-                  : READING_STATUSES
-                ).map((value) => (
-                  <SelectItem key={value} value={value}>
-                    {READING_STATUS_META[value].label}
+                <SelectItem value="all">All collections</SelectItem>
+                {collectionsPresent.map((label) => (
+                  <SelectItem key={label.toLowerCase()} value={label}>
+                    {label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
+          ) : null}
 
-            {languagesPresent.length > 1 ? (
-              <Select value={language} onValueChange={setLanguage}>
-                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All languages</SelectItem>
-                  {languagesPresent.map((code) => {
-                    const lang = getLanguage(code)
-                    return (
-                      <SelectItem key={code} value={code}>
-                        {lang ? `${lang.flag} ${lang.name}` : code}
-                      </SelectItem>
-                    )
-                  })}
-                </SelectContent>
-              </Select>
-            ) : null}
-
-            {categoriesPresent.length > 0 ? (
-              <Select value={category} onValueChange={setCategory}>
-                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                  <SelectValue placeholder="Category" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All categories</SelectItem>
-                  {categoriesPresent.map((label) => (
-                    <SelectItem key={label.toLowerCase()} value={label}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-
-            {collectionsPresent.length > 0 ? (
-              <Select value={collection} onValueChange={setCollection}>
-                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                  <SelectValue placeholder="Collection" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All collections</SelectItem>
-                  {collectionsPresent.map((label) => (
-                    <SelectItem key={label.toLowerCase()} value={label}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-
-            {shelvesPresent.length > 0 ? (
-              <Select value={shelf} onValueChange={setShelf}>
-                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                  <SelectValue placeholder="Shelf" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All shelves</SelectItem>
-                  {shelvesPresent.map((label) => (
-                    <SelectItem key={label.toLowerCase()} value={label}>
-                      {label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            ) : null}
-
-            <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
+          {shelvesPresent.length > 0 ? (
+            <Select value={shelf} onValueChange={setShelf}>
               <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                <SelectValue />
+                <SelectValue placeholder="Shelf" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="recent">Recently added</SelectItem>
-                <SelectItem value="title">Title A–Z</SelectItem>
-                <SelectItem value="author">Author A–Z</SelectItem>
-                <SelectItem value="rating">Highest rated</SelectItem>
+                <SelectItem value="all">All shelves</SelectItem>
+                {shelvesPresent.map((label) => (
+                  <SelectItem key={label.toLowerCase()} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
-          </div>
+          ) : null}
+
+          <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
+            <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">Recently added</SelectItem>
+              <SelectItem value="title">Title A–Z</SelectItem>
+              <SelectItem value="author">Author A–Z</SelectItem>
+              <SelectItem value="rating">Highest rated</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -547,18 +549,21 @@ export default function LibraryPage() {
         total === 0 ? (
           <EmptyState
             icon={<LibraryBig />}
-            title="Your shelf is empty"
-            description="Scan a barcode, snap a cover, import a CSV, or add details by hand."
+            title="Your library is empty"
+            description="Scan a barcode, import a Goodreads export, or add your first book."
             action={
               <div className="flex flex-wrap justify-center gap-2">
                 <Button asChild>
                   <Link to="/add?scan=barcode">
                     <ScanBarcode className="h-4 w-4" />
-                    Scan first book
+                    Scan book
                   </Link>
                 </Button>
                 <Button asChild variant="outline">
                   <Link to="/settings#import-export">Import library</Link>
+                </Button>
+                <Button asChild variant="ghost">
+                  <Link to="/add">Add first book</Link>
                 </Button>
               </div>
             }
@@ -567,7 +572,7 @@ export default function LibraryPage() {
           <EmptyState
             icon={<Search />}
             title="No matches"
-            description="Try a different search or clear the filters."
+            description="Try a different filter or clear the chips above."
           />
         )
       ) : (
@@ -580,6 +585,42 @@ export default function LibraryPage() {
               selecting={selecting}
               selected={selected.has(book.id)}
               onToggle={() => toggleSelect(book.id)}
+              onFavorite={(b) => {
+                void patchBooks
+                  .mutateAsync({
+                    ids: [b.id],
+                    patch: { is_favorite: !b.is_favorite },
+                  })
+                  .then(() =>
+                    toast.success(
+                      b.is_favorite ? 'Removed from favorites' : 'Favorited',
+                    ),
+                  )
+                  .catch((err) =>
+                    toast.error(
+                      err instanceof Error ? err.message : 'Could not update',
+                    ),
+                  )
+              }}
+              onDelete={(b) => {
+                void deleteBooks
+                  .mutateAsync([b.id])
+                  .then(() => {
+                    toast.success('Book deleted', {
+                      action: {
+                        label: 'Undo',
+                        onClick: () => {
+                          void restoreBooks.mutateAsync([b])
+                        },
+                      },
+                    })
+                  })
+                  .catch((err) =>
+                    toast.error(
+                      err instanceof Error ? err.message : 'Could not delete',
+                    ),
+                  )
+              }}
             />
           )}
         />
@@ -588,21 +629,54 @@ export default function LibraryPage() {
   )
 }
 
+function Chip({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+        active
+          ? 'border-primary bg-primary/10 text-primary'
+          : 'border-border text-muted-foreground hover:text-foreground',
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
 function SelectableCard({
   book,
   selecting,
   selected,
   onToggle,
+  onFavorite,
+  onDelete,
 }: {
   book: BookWithCreator
   selecting: boolean
   selected: boolean
   onToggle: () => void
+  onFavorite: (book: BookWithCreator) => void
+  onDelete: (book: BookWithCreator) => void
 }) {
   if (!selecting) {
     return (
       <div style={{ contentVisibility: 'auto', containIntrinsicSize: '200px' }}>
-        <BookCard book={book} />
+        <BookCard
+          book={book}
+          onFavorite={onFavorite}
+          onDelete={onDelete}
+        />
       </div>
     )
   }

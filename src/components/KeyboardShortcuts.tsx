@@ -21,15 +21,7 @@ export function KeyboardShortcuts() {
 
       if (key === 'k' && !e.shiftKey) {
         e.preventDefault()
-        const search = document.querySelector<HTMLInputElement>(
-          '[data-testid=library-search]',
-        )
-        if (search) {
-          search.focus()
-          search.select()
-        } else {
-          navigate('/')
-        }
+        navigate('/search')
         return
       }
 

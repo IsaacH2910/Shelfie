@@ -55,10 +55,10 @@ export default function ShelvesPage() {
         <EmptyState
           icon={<MapPin />}
           title="No shelves yet"
-          description="Create shelf locations in Settings, then assign books to them."
+          description="Create shelf locations in Organize, then assign books to them."
           action={
             <Button asChild>
-              <Link to="/settings#shelves">Manage shelves</Link>
+              <Link to="/organize#shelves">Manage shelves</Link>
             </Button>
           }
         />
@@ -210,7 +210,7 @@ export default function ShelvesPage() {
       <p className="text-center text-xs text-muted-foreground">
         Edit shelf names in{' '}
         <Link
-          to="/settings#shelves"
+          to="/organize#shelves"
           className="font-medium text-primary hover:underline"
         >
           Settings

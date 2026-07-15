@@ -46,7 +46,7 @@ export function ShelfSelect({
         <div className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
           No shelves yet.{' '}
           <Link
-            to="/settings#shelves"
+            to="/organize#shelves"
             className="font-medium text-primary hover:underline"
           >
             Add shelves in Settings
@@ -76,7 +76,7 @@ export function ShelfSelect({
       <p className="text-xs text-muted-foreground">
         Pick a place from your list. Edit shelves in{' '}
         <Link
-          to="/settings#shelves"
+          to="/organize#shelves"
           className="font-medium text-primary hover:underline"
         >
           Settings

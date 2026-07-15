@@ -37,7 +37,7 @@ const STEPS = [
     body: 'Name physical spots like “Living room › Shelf A” so you always know where a book lives.',
     action: (
       <Button asChild variant="secondary" className="w-full">
-        <Link to="/settings#shelves">Set up shelves</Link>
+        <Link to="/organize#shelves">Set up shelves</Link>
       </Button>
     ),
   },

@@ -1,7 +1,8 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react'
-import { AlertTriangle } from 'lucide-react'
+import { AlertTriangle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { logCrash } from '@/lib/crashLog'
+import { isChunkLoadError } from '@/lib/lazyRetry'
 
 type Props = {
   children?: ReactNode
@@ -10,13 +11,18 @@ type Props = {
 type State = {
   hasError: boolean
   error: Error | null
+  chunkError: boolean
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false, error: null }
+  state: State = { hasError: false, error: null, chunkError: false }
 
   static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error }
+    return {
+      hasError: true,
+      error,
+      chunkError: isChunkLoadError(error),
+    }
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
@@ -26,10 +32,25 @@ export class ErrorBoundary extends Component<Props, State> {
       stack: error.stack,
       componentStack: info.componentStack ?? undefined,
     })
+
+    // Stale JS chunk after deploy — hard reload once so the new build loads.
+    if (isChunkLoadError(error)) {
+      const key = 'shelfie_boundary_chunk_reload'
+      if (!sessionStorage.getItem(key)) {
+        sessionStorage.setItem(key, '1')
+        window.location.reload()
+      }
+    }
   }
 
   private retry = () => {
-    this.setState({ hasError: false, error: null })
+    if (this.state.chunkError) {
+      sessionStorage.removeItem('shelfie_boundary_chunk_reload')
+      sessionStorage.removeItem('shelfie_chunk_reload')
+      window.location.reload()
+      return
+    }
+    this.setState({ hasError: false, error: null, chunkError: false })
   }
 
   render() {
@@ -37,33 +58,40 @@ export class ErrorBoundary extends Component<Props, State> {
       return (
         <div
           role="alert"
-          className="flex min-h-[40vh] flex-col items-center justify-center gap-4 px-6 py-16 text-center"
+          className="flex min-h-[50vh] flex-col items-center justify-center gap-5 px-6 py-16 text-center animate-in"
         >
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-destructive/10 text-destructive">
             <AlertTriangle className="h-7 w-7" aria-hidden />
           </div>
-          <div className="space-y-1">
-            <h2 className="text-lg font-semibold tracking-tight">
-              Something went wrong
+          <div className="space-y-2">
+            <h2 className="text-xl font-semibold tracking-tight">
+              {this.state.chunkError
+                ? 'App updated'
+                : 'Something went wrong'}
             </h2>
             <p className="max-w-sm text-sm text-muted-foreground">
-              {this.state.error?.message ||
-                'An unexpected error occurred. You can try again.'}
+              {this.state.chunkError
+                ? 'A newer version of Shelfie is available. Refresh to continue.'
+                : this.state.error?.message ||
+                  'An unexpected error occurred. You can try again.'}
             </p>
-            <p className="text-xs text-muted-foreground">
-              Details were saved under Settings → Diagnostics.
-            </p>
+            {!this.state.chunkError ? (
+              <p className="text-xs text-muted-foreground">
+                Details were saved under Settings → Diagnostics.
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap justify-center gap-2">
             <Button type="button" onClick={this.retry}>
-              Try again
+              <RefreshCw className="h-4 w-4" />
+              {this.state.chunkError ? 'Refresh' : 'Try again'}
             </Button>
             <Button
               type="button"
               variant="outline"
               onClick={() => window.location.assign('/')}
             >
-              Back to library
+              Back to home
             </Button>
           </div>
         </div>

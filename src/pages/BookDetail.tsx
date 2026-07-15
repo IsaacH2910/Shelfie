@@ -31,6 +31,7 @@ import { EmptyState } from '@/components/EmptyState'
 import {
   formatProgress,
   normalizeReadingStatus,
+  progressPercent,
   readingTimestampsForStatus,
   type ReadingStatus,
 } from '@/lib/reading'
@@ -93,7 +94,9 @@ export default function BookDetailPage() {
   const touchOpened = useTouchBookOpened()
 
   const [editing, setEditing] = useState(false)
-  const [panel, setPanel] = useState<'details' | 'notes' | 'loans'>('details')
+  const [panel, setPanel] = useState<
+    'overview' | 'details' | 'notes' | 'loans'
+  >('overview')
   const [draft, setDraft] = useState<BookDraft | null>(null)
   const [saving, setSaving] = useState(false)
   const [pendingCover, setPendingCover] = useState<{
@@ -288,75 +291,140 @@ export default function BookDetailPage() {
   }
 
   const PANELS = [
+    { id: 'overview' as const, label: 'Overview' },
     { id: 'details' as const, label: 'Details' },
     { id: 'notes' as const, label: 'Notes' },
     { id: 'loans' as const, label: 'Loans' },
   ]
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6 animate-in">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <div className="flex flex-wrap justify-end gap-2">
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={toggleFavorite}
             disabled={patchBooks.isPending}
             aria-pressed={!!book.is_favorite}
+            aria-label={book.is_favorite ? 'Unfavorite' : 'Favorite'}
           >
             <Heart
               className={cn(
-                'h-4 w-4',
-                book.is_favorite && 'fill-red-500 text-red-500',
+                'h-5 w-5 transition-transform',
+                book.is_favorite && 'fill-red-500 text-red-500 scale-110',
               )}
             />
-            {book.is_favorite ? 'Favorited' : 'Favorite'}
           </Button>
           <Button variant="outline" size="sm" onClick={startEdit}>
             <Pencil className="h-4 w-4" />
             Edit
           </Button>
           <Button
-            variant="outline"
-            size="sm"
+            variant="ghost"
+            size="icon"
             onClick={() => void handleDelete()}
+            aria-label="Delete"
           >
-            <Trash2 className="h-4 w-4" />
-            Delete
+            <Trash2 className="h-4 w-4 text-muted-foreground" />
           </Button>
         </div>
       </div>
 
-      <div className="flex flex-col gap-5 sm:flex-row">
-        <div className="mx-auto w-40 shrink-0 sm:mx-0">
-          <CoverImage url={book.cover_url} title={book.title} />
+      <div className="flex flex-col items-center gap-5 text-center sm:flex-row sm:items-start sm:text-left">
+        <div className="w-44 shrink-0 sm:w-48">
+          <CoverImage
+            url={book.cover_url}
+            title={book.title}
+            className="shadow-lg"
+          />
         </div>
         <div className="flex-1 space-y-3">
-          <div>
-            <h1 className="text-2xl font-bold leading-tight tracking-tight">
+          <div className="space-y-1">
+            <h1 className="text-2xl font-bold leading-tight tracking-tight sm:text-3xl">
               {book.title}
             </h1>
             {book.author ? (
-              <p className="text-base text-muted-foreground">{book.author}</p>
+              <p className="text-base text-muted-foreground sm:text-lg">
+                {book.author}
+              </p>
             ) : null}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          {book.rating ? (
+            <div className="flex items-center justify-center gap-2 sm:justify-start">
+              <StarRating value={book.rating} />
+              <span className="text-sm text-muted-foreground">
+                {book.rating} / 5
+              </span>
+            </div>
+          ) : null}
+
+          <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
             <StatusBadge status={book.reading_status} />
             <Badge variant="secondary">
-              {OWNERSHIP_OPTIONS.find((o) => o.value === (book.ownership ?? 'owned'))
-                ?.short ?? 'Owned'}
+              {OWNERSHIP_OPTIONS.find(
+                (o) => o.value === (book.ownership ?? 'owned'),
+              )?.short ?? 'Owned'}
             </Badge>
-            {book.is_favorite ? (
-              <Badge variant="outline" className="gap-1">
-                <Heart className="h-3 w-3 fill-red-500 text-red-500" />
-                Favorite
-              </Badge>
-            ) : null}
             <LanguageBadge code={book.language} />
+          </div>
+
+          {(() => {
+            const pct = progressPercent(book.current_page, book.page_count)
+            return pct != null ? (
+              <div className="mx-auto w-full max-w-xs space-y-1.5 sm:mx-0">
+                <div className="h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-primary transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  {pct}% · {formatProgress(book.current_page, book.page_count)}
+                </p>
+              </div>
+            ) : null
+          })()}
+        </div>
+      </div>
+
+      <div className="flex gap-1 overflow-x-auto rounded-lg bg-muted p-1 no-scrollbar">
+        {PANELS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setPanel(option.id)}
+            className={cn(
+              'shrink-0 rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              panel === option.id
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {panel === 'overview' ? (
+        <div className="space-y-4">
+          <div className="max-w-xs">
+            <ReadingStatusSelect
+              value={normalizeReadingStatus(book.reading_status)}
+              onChange={setReadingStatus}
+              disabled={patchBooks.isPending}
+            />
+          </div>
+          {book.series ? (
+            <p className="text-sm text-muted-foreground">
+              Series · {book.series}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
             {book.household_id ? (
               <Badge variant="secondary" className="gap-1">
                 <Users className="h-3 w-3" />
@@ -369,7 +437,11 @@ export default function BookDetailPage() {
               </Badge>
             )}
             {(book.categories ?? []).map((label) => (
-              <Badge key={label.toLowerCase()} variant="outline" className="gap-1">
+              <Badge
+                key={label.toLowerCase()}
+                variant="outline"
+                className="gap-1"
+              >
                 <Tag className="h-3 w-3" />
                 {label}
               </Badge>
@@ -384,57 +456,32 @@ export default function BookDetailPage() {
               </Badge>
             ))}
           </div>
-
-          <div className="max-w-xs">
-            <ReadingStatusSelect
-              value={normalizeReadingStatus(book.reading_status)}
-              onChange={setReadingStatus}
-              disabled={patchBooks.isPending}
-            />
-          </div>
-
-          {book.series ? (
-            <p className="text-sm text-muted-foreground">Series · {book.series}</p>
-          ) : null}
-
-          {book.rating ? (
-            <div className="flex items-center gap-2">
-              <StarRating value={book.rating} />
-              <span className="text-sm text-muted-foreground">
-                {book.rating} / 5
-              </span>
+          {book.review ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h2 className="mb-2 text-sm font-semibold">Review</h2>
+              <p className="whitespace-pre-wrap text-sm text-foreground">
+                {book.review}
+              </p>
             </div>
           ) : null}
-
-          {formatProgress(book.current_page, book.page_count) ? (
-            <p className="text-sm text-muted-foreground">
-              {formatProgress(book.current_page, book.page_count)}
-            </p>
+          {related.length > 0 ? (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Other editions ({related.length})
+              </h2>
+              <div className="grid grid-cols-3 gap-4 sm:grid-cols-4">
+                {related.map((other) => (
+                  <BookCard key={other.id} book={other} />
+                ))}
+              </div>
+            </div>
           ) : null}
         </div>
-      </div>
-
-      <div className="inline-flex rounded-lg bg-muted p-1">
-        {PANELS.map((option) => (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => setPanel(option.id)}
-            className={cn(
-              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-              panel === option.id
-                ? 'bg-background text-foreground shadow-sm'
-                : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            {option.label}
-          </button>
-        ))}
-      </div>
+      ) : null}
 
       {panel === 'details' ? (
         <div className="space-y-4">
-          <dl className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
+          <dl className="space-y-3 rounded-xl border border-border bg-card p-4 text-sm">
             {book.shelf_location ? (
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -512,33 +559,13 @@ export default function BookDetailPage() {
               <div className="flex items-center gap-2 text-muted-foreground">
                 <BookText className="h-4 w-4" />
                 <dd>
-                  {[book.publisher, book.published_year].filter(Boolean).join(' · ')}
+                  {[book.publisher, book.published_year]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </dd>
               </div>
             ) : null}
           </dl>
-
-          {book.review ? (
-            <div className="rounded-xl border border-border bg-card p-4">
-              <h2 className="mb-2 text-sm font-semibold">Review</h2>
-              <p className="whitespace-pre-wrap text-sm text-foreground">
-                {book.review}
-              </p>
-            </div>
-          ) : null}
-
-          {related.length > 0 ? (
-            <div className="space-y-3">
-              <h2 className="text-sm font-semibold text-muted-foreground">
-                Other editions you own ({related.length})
-              </h2>
-              <div className="grid grid-cols-3 gap-4 sm:grid-cols-4">
-                {related.map((other) => (
-                  <BookCard key={other.id} book={other} />
-                ))}
-              </div>
-            </div>
-          ) : null}
         </div>
       ) : null}
 

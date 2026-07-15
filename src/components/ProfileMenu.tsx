@@ -3,6 +3,7 @@ import {
   BarChart3,
   Check,
   Download,
+  FolderOpen,
   LogOut,
   MapPin,
   Monitor,
@@ -102,6 +103,12 @@ export function ProfileMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
+          <Link to="/organize">
+            <FolderOpen />
+            Organize
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
           <Link to="/shelves">
             <MapPin />
             Shelves
@@ -114,7 +121,7 @@ export function ProfileMenu() {
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/settings#install">
+          <Link to="/download">
             <Download />
             Download app
           </Link>

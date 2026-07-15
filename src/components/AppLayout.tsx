@@ -1,16 +1,18 @@
 import { Suspense } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   BarChart3,
   BookMarked,
   Download,
+  FolderOpen,
+  Home,
   Library,
-  MapPin,
-  Plus,
+  Search,
   Settings,
   ShoppingBag,
   Users,
 } from 'lucide-react'
+import { AddFab } from '@/components/AddFab'
 import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
 import { LoanReminders } from '@/components/LoanReminders'
 import { MoreNav } from '@/components/MoreNav'
@@ -19,14 +21,17 @@ import { ProfileMenu } from '@/components/ProfileMenu'
 import { FullScreenLoader } from '@/components/Spinner'
 import { cn } from '@/lib/utils'
 
-const PRIMARY_NAV = [
-  { to: '/', label: 'Library', icon: Library, end: true },
-  { to: '/shop', label: 'Shop', icon: ShoppingBag, end: false },
-  { to: '/shelves', label: 'Shelves', icon: MapPin, end: false },
-  { to: '/stats', label: 'Stats', icon: BarChart3, end: false },
+const SIDE_PRIMARY = [
+  { to: '/', label: 'Home', icon: Home, end: true },
+  { to: '/library', label: 'Library', icon: Library, end: false },
+  { to: '/search', label: 'Search', icon: Search, end: false },
+  { to: '/stats', label: 'Statistics', icon: BarChart3, end: false },
 ] as const
 
-const SECONDARY_NAV = [
+const SIDE_SECONDARY = [
+  { to: '/organize', label: 'Organize', icon: FolderOpen },
+  { to: '/shelves', label: 'Shelves', icon: Library },
+  { to: '/shop', label: 'Shop', icon: ShoppingBag },
   { to: '/household', label: 'Household', icon: Users },
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const
@@ -73,6 +78,11 @@ function SideLink({
 }
 
 export function AppLayout() {
+  const location = useLocation()
+  const hideFab =
+    location.pathname.startsWith('/add') ||
+    location.pathname.startsWith('/book/')
+
   return (
     <div className="min-h-screen bg-background">
       <a
@@ -90,31 +100,30 @@ export function AppLayout() {
           <Brand />
         </div>
         <Link
-          to="/add"
+          to="/add?scan=barcode"
           className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-[0.98]"
         >
-          <Plus className="h-4 w-4" />
-          Add book
+          Scan / Add
         </Link>
 
         <nav className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto">
           <div className="space-y-1">
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Library
+              Browse
             </p>
-            {PRIMARY_NAV.map((item) => (
+            {SIDE_PRIMARY.map((item) => (
               <SideLink key={item.to} {...item} />
             ))}
           </div>
           <div className="space-y-1">
             <p className="px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Account
+              Manage
             </p>
-            {SECONDARY_NAV.map((item) => (
+            {SIDE_SECONDARY.map((item) => (
               <SideLink key={item.to} {...item} />
             ))}
             <Link
-              to="/settings#install"
+              to="/download"
               className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
             >
               <Download className="h-4.5 w-4.5" />
@@ -143,19 +152,25 @@ export function AppLayout() {
         </div>
       </main>
 
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-center border-t border-border bg-background/90 px-1 pt-1.5 backdrop-blur-md md:hidden">
-        <BottomTab to="/" label="Library" icon={Library} end />
-        <BottomTab to="/shop" label="Shop" icon={ShoppingBag} />
-        <div className="flex items-center justify-center">
-          <Link
-            to="/add"
-            aria-label="Add book"
-            className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg ring-4 ring-background transition active:scale-95"
-          >
-            <Plus className="h-6 w-6" />
-          </Link>
+      {/* Mobile FAB — bottom-right above the tab bar */}
+      {!hideFab ? (
+        <div className="safe-fab fixed bottom-20 right-4 z-40 md:hidden">
+          <AddFab />
         </div>
-        <BottomTab to="/shelves" label="Shelves" icon={MapPin} />
+      ) : null}
+
+      {/* Desktop FAB */}
+      {!hideFab ? (
+        <div className="fixed bottom-6 right-6 z-40 hidden md:block">
+          <AddFab />
+        </div>
+      ) : null}
+
+      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 items-center border-t border-border bg-background/90 px-1 pt-1.5 backdrop-blur-md md:hidden">
+        <BottomTab to="/" label="Home" icon={Home} end />
+        <BottomTab to="/library" label="Library" icon={Library} />
+        <BottomTab to="/search" label="Search" icon={Search} />
+        <BottomTab to="/stats" label="Stats" icon={BarChart3} />
         <MoreNav />
       </nav>
     </div>

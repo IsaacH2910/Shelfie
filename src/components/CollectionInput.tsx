@@ -49,7 +49,7 @@ export function CollectionInput({
         <div className="rounded-xl border border-dashed border-border px-3 py-3 text-sm text-muted-foreground">
           No collections yet.{' '}
           <Link
-            to="/settings#collections"
+            to="/organize#collections"
             className="font-medium text-primary hover:underline"
           >
             Create some in Settings
@@ -89,7 +89,7 @@ export function CollectionInput({
       <p className="text-xs text-muted-foreground">
         Tap to select. Manage the list in{' '}
         <Link
-          to="/settings#collections"
+          to="/organize#collections"
           className="font-medium text-primary hover:underline"
         >
           Settings
