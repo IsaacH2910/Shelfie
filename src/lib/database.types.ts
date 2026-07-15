@@ -16,6 +16,10 @@ export interface Database {
           avatar_url: string | null
           category_labels: string[]
           shelf_locations: string[]
+          collection_labels: string[]
+          shelf_capacities: Json
+          onboarding_completed: boolean
+          yearly_reading_goal: number | null
           created_at: string
         }
         Insert: {
@@ -24,6 +28,10 @@ export interface Database {
           avatar_url?: string | null
           category_labels?: string[]
           shelf_locations?: string[]
+          collection_labels?: string[]
+          shelf_capacities?: Json
+          onboarding_completed?: boolean
+          yearly_reading_goal?: number | null
           created_at?: string
         }
         Update: {
@@ -32,6 +40,10 @@ export interface Database {
           avatar_url?: string | null
           category_labels?: string[]
           shelf_locations?: string[]
+          collection_labels?: string[]
+          shelf_capacities?: Json
+          onboarding_completed?: boolean
+          yearly_reading_goal?: number | null
           created_at?: string
         }
         Relationships: []
@@ -179,6 +191,14 @@ export interface Database {
           current_page: number | null
           reading_started_at: string | null
           reading_finished_at: string | null
+          ownership: string
+          is_favorite: boolean
+          collections: string[]
+          series: string | null
+          publisher: string | null
+          published_year: number | null
+          review: string | null
+          last_opened_at: string | null
           created_at: string
           updated_at: string
         }
@@ -201,6 +221,14 @@ export interface Database {
           current_page?: number | null
           reading_started_at?: string | null
           reading_finished_at?: string | null
+          ownership?: string
+          is_favorite?: boolean
+          collections?: string[]
+          series?: string | null
+          publisher?: string | null
+          published_year?: number | null
+          review?: string | null
+          last_opened_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -223,6 +251,14 @@ export interface Database {
           current_page?: number | null
           reading_started_at?: string | null
           reading_finished_at?: string | null
+          ownership?: string
+          is_favorite?: boolean
+          collections?: string[]
+          series?: string | null
+          publisher?: string | null
+          published_year?: number | null
+          review?: string | null
+          last_opened_at?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -239,6 +275,91 @@ export interface Database {
             columns: ['household_id']
             isOneToOne: false
             referencedRelation: 'households'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      book_annotations: {
+        Row: {
+          id: string
+          book_id: string
+          created_by: string
+          kind: string
+          content: string
+          page: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          book_id: string
+          created_by?: string
+          kind: string
+          content?: string
+          page?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          book_id?: string
+          created_by?: string
+          kind?: string
+          content?: string
+          page?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'book_annotations_book_id_fkey'
+            columns: ['book_id']
+            isOneToOne: false
+            referencedRelation: 'books'
+            referencedColumns: ['id']
+          },
+        ]
+      }
+      loans: {
+        Row: {
+          id: string
+          book_id: string
+          created_by: string
+          borrower_name: string
+          loaned_at: string
+          due_at: string | null
+          returned_at: string | null
+          notes: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          book_id: string
+          created_by?: string
+          borrower_name: string
+          loaned_at?: string
+          due_at?: string | null
+          returned_at?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          book_id?: string
+          created_by?: string
+          borrower_name?: string
+          loaned_at?: string
+          due_at?: string | null
+          returned_at?: string | null
+          notes?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: 'loans_book_id_fkey'
+            columns: ['book_id']
+            isOneToOne: false
+            referencedRelation: 'books'
             referencedColumns: ['id']
           },
         ]

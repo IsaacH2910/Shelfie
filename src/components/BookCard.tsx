@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { MapPin, Tag, Users } from 'lucide-react'
+import { Heart, MapPin, Tag, Users } from 'lucide-react'
 import { CoverImage } from '@/components/CoverImage'
 import { LanguageBadge } from '@/components/LanguageBadge'
 import { StatusBadge } from '@/components/StatusBadge'
@@ -27,9 +27,21 @@ export function BookCard({ book }: { book: BookWithCreator }) {
           title={book.title}
           className="transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-md group-active:scale-[0.98]"
         />
-        {book.household_id ? (
-          <span className="absolute right-1.5 top-1.5 flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm">
-            <Users className="h-3.5 w-3.5" />
+        <div className="absolute right-1.5 top-1.5 flex flex-col gap-1">
+          {book.is_favorite ? (
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-red-400 backdrop-blur-sm">
+              <Heart className="h-3.5 w-3.5 fill-current" />
+            </span>
+          ) : null}
+          {book.household_id ? (
+            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm">
+              <Users className="h-3.5 w-3.5" />
+            </span>
+          ) : null}
+        </div>
+        {book.ownership && book.ownership !== 'owned' ? (
+          <span className="absolute left-1.5 top-1.5 rounded-full bg-black/55 px-1.5 py-0.5 text-[10px] font-medium text-white backdrop-blur-sm">
+            {book.ownership === 'wishlist' ? 'Wish' : 'Want'}
           </span>
         ) : null}
         {showProgress ? (

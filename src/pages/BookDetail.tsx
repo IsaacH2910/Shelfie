@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
@@ -6,6 +6,7 @@ import {
   BookText,
   CalendarDays,
   Copy,
+  Heart,
   Lock,
   MapPin,
   Pencil,
@@ -15,28 +16,23 @@ import {
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { CoverImage } from '@/components/CoverImage'
 import { LanguageBadge } from '@/components/LanguageBadge'
 import { StatusBadge } from '@/components/StatusBadge'
 import { StarRating } from '@/components/StarRating'
 import { BookForm } from '@/components/BookForm'
 import { BookCard } from '@/components/BookCard'
+import { BookAnnotations } from '@/components/BookAnnotations'
+import { BookLoans } from '@/components/BookLoans'
 import { FullScreenLoader } from '@/components/Spinner'
 import { EmptyState } from '@/components/EmptyState'
 import { formatProgress, normalizeReadingStatus } from '@/lib/reading'
+import { OWNERSHIP_OPTIONS } from '@/lib/ownership'
 import {
   useBooks,
   useDeleteBook,
+  useRestoreBooks,
+  useTouchBookOpened,
   useUpdateBook,
   type BookWithCreator,
 } from '@/hooks/useBooks'
@@ -54,7 +50,9 @@ function bookToDraft(book: Book): BookDraft {
     language: book.language ?? '',
     shelf_location: book.shelf_location ?? '',
     categories: book.categories ?? [],
+    collections: book.collections ?? [],
     notes: book.notes ?? '',
+    review: book.review ?? '',
     cover_url: book.cover_url,
     source: book.source as BookDraft['source'],
     scope: book.household_id ? 'household' : 'private',
@@ -65,6 +63,11 @@ function bookToDraft(book: Book): BookDraft {
     current_page: book.current_page,
     reading_started_at: book.reading_started_at,
     reading_finished_at: book.reading_finished_at,
+    ownership: (book.ownership as BookDraft['ownership']) ?? 'owned',
+    is_favorite: !!book.is_favorite,
+    series: book.series ?? '',
+    publisher: book.publisher ?? '',
+    published_year: book.published_year,
   }
 }
 
@@ -76,6 +79,8 @@ export default function BookDetailPage() {
   const { data: households } = useHouseholds()
   const updateBook = useUpdateBook()
   const deleteBook = useDeleteBook()
+  const restoreBooks = useRestoreBooks()
+  const touchOpened = useTouchBookOpened()
 
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<BookDraft | null>(null)
@@ -89,6 +94,11 @@ export default function BookDetailPage() {
     () => (books ?? []).find((b) => b.id === id) ?? null,
     [books, id],
   )
+
+  useEffect(() => {
+    if (book?.id) void touchOpened.mutateAsync(book.id).catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [book?.id])
 
   const related = useMemo(() => {
     if (!book) return [] as BookWithCreator[]
@@ -146,12 +156,23 @@ export default function BookDetailPage() {
       await updateBook.mutateAsync({
         id: book.id,
         draft: { ...draft, cover_url: cover },
+        expectedUpdatedAt: book.updated_at,
       })
       toast.success('Changes saved')
       setEditing(false)
       setPendingCover(null)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Could not save')
+      const message =
+        err instanceof Error ? err.message : 'Could not save'
+      toast.error(message, {
+        action:
+          err instanceof Error && err.name === 'ConflictError'
+            ? {
+                label: 'Reload',
+                onClick: () => window.location.reload(),
+              }
+            : undefined,
+      })
     } finally {
       setSaving(false)
     }
@@ -168,10 +189,26 @@ export default function BookDetailPage() {
   }
 
   const handleDelete = async () => {
+    const snapshot = book
     try {
       await deleteBook.mutateAsync(book.id)
-      toast.success('Book removed')
       navigate('/')
+      toast.success('Book removed', {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            void restoreBooks
+              .mutateAsync([snapshot])
+              .then(() => toast.success('Restored'))
+              .catch((err) =>
+                toast.error(
+                  err instanceof Error ? err.message : 'Could not undo',
+                ),
+              )
+          },
+        },
+        duration: 6000,
+      })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not delete')
     }
@@ -224,31 +261,14 @@ export default function BookDetailPage() {
             <Pencil className="h-4 w-4" />
             Edit
           </Button>
-          <Dialog>
-            <DialogTrigger asChild>
-              <Button variant="outline" size="sm">
-                <Trash2 className="h-4 w-4" />
-                Delete
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Delete this book?</DialogTitle>
-                <DialogDescription>
-                  “{book.title}” will be removed from your library. This can’t be
-                  undone.
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <DialogClose asChild>
-                  <Button variant="outline">Cancel</Button>
-                </DialogClose>
-                <Button variant="destructive" onClick={handleDelete}>
-                  Delete
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void handleDelete()}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </Button>
         </div>
       </div>
 
@@ -268,6 +288,16 @@ export default function BookDetailPage() {
 
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status={book.reading_status} />
+            <Badge variant="secondary">
+              {OWNERSHIP_OPTIONS.find((o) => o.value === (book.ownership ?? 'owned'))
+                ?.short ?? 'Owned'}
+            </Badge>
+            {book.is_favorite ? (
+              <Badge variant="outline" className="gap-1">
+                <Heart className="h-3 w-3 fill-red-500 text-red-500" />
+                Favorite
+              </Badge>
+            ) : null}
             <LanguageBadge code={book.language} />
             {book.household_id ? (
               <Badge variant="secondary" className="gap-1">
@@ -286,7 +316,19 @@ export default function BookDetailPage() {
                 {label}
               </Badge>
             ))}
+            {(book.collections ?? []).map((label) => (
+              <Badge
+                key={`c-${label.toLowerCase()}`}
+                variant="default"
+                className="gap-1"
+              >
+                {label}
+              </Badge>
+            ))}
           </div>
+          {book.series ? (
+            <p className="text-sm text-muted-foreground">Series · {book.series}</p>
+          ) : null}
 
           {book.rating ? (
             <div className="flex items-center gap-2">
@@ -348,6 +390,19 @@ export default function BookDetailPage() {
                 </dd>
               </div>
             ) : null}
+            {book.last_opened_at ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <CalendarDays className="h-4 w-4" />
+                <dd>
+                  Last opened{' '}
+                  {new Date(book.last_opened_at).toLocaleDateString(undefined, {
+                    year: 'numeric',
+                    month: 'short',
+                    day: 'numeric',
+                  })}
+                </dd>
+              </div>
+            ) : null}
             {book.isbn ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <BookText className="h-4 w-4 shrink-0" />
@@ -368,13 +423,26 @@ export default function BookDetailPage() {
         </div>
       </div>
 
+      {book.review ? (
+        <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="mb-2 text-sm font-semibold">Review</h2>
+          <p className="whitespace-pre-wrap text-sm text-foreground">
+            {book.review}
+          </p>
+        </div>
+      ) : null}
+
       {book.notes ? (
         <div className="rounded-xl border border-border bg-card p-4">
+          <h2 className="mb-2 text-sm font-semibold">Notes</h2>
           <p className="whitespace-pre-wrap text-sm text-foreground">
             {book.notes}
           </p>
         </div>
       ) : null}
+
+      <BookAnnotations bookId={book.id} />
+      <BookLoans bookId={book.id} />
 
       {related.length > 0 ? (
         <div className="space-y-3">

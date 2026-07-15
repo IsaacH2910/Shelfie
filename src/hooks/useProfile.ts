@@ -2,6 +2,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
 import { useAuth } from '@/context/AuthProvider'
 import type { Profile } from '@/types'
+import type { Json } from '@/lib/database.types'
+
+export type ProfilePatch = {
+  display_name?: string
+  onboarding_completed?: boolean
+  yearly_reading_goal?: number | null
+  collection_labels?: string[]
+  shelf_capacities?: Json
+  category_labels?: string[]
+  shelf_locations?: string[]
+}
 
 export function useProfile() {
   const { user } = useAuth()
@@ -24,10 +35,14 @@ export function useUpdateProfile() {
   const qc = useQueryClient()
   const { user } = useAuth()
   return useMutation({
-    mutationFn: async (patch: { display_name: string }): Promise<Profile> => {
+    mutationFn: async (patch: ProfilePatch): Promise<Profile> => {
+      const payload: ProfilePatch = { ...patch }
+      if (payload.display_name !== undefined) {
+        payload.display_name = payload.display_name.trim()
+      }
       const { data, error } = await supabase
         .from('profiles')
-        .update({ display_name: patch.display_name.trim() })
+        .update(payload)
         .eq('id', user!.id)
         .select()
         .single()

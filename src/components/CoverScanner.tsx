@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import Tesseract from 'tesseract.js'
-import { Camera, ImagePlus } from 'lucide-react'
+import { Camera, ImagePlus, RotateCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   Select,
@@ -11,11 +11,13 @@ import {
 } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/Spinner'
+import { ImageCropper } from '@/components/ImageCropper'
 import {
   friendlyCameraError,
   openCameraStream,
   stopStream,
 } from '@/lib/camera'
+import { splitOcrCandidates } from '@/lib/ocrRegions'
 import {
   AUTO_OCR_TESSERACT,
   OCR_LANGUAGES,
@@ -26,6 +28,27 @@ export type OcrResult = {
   text: string
   blob: Blob
   previewUrl: string
+}
+
+async function rotateBlob(blob: Blob, degrees: 90 | 180 | 270): Promise<Blob> {
+  const bitmap = await createImageBitmap(blob)
+  const canvas = document.createElement('canvas')
+  const swap = degrees === 90 || degrees === 270
+  canvas.width = swap ? bitmap.height : bitmap.width
+  canvas.height = swap ? bitmap.width : bitmap.height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    bitmap.close()
+    return blob
+  }
+  ctx.translate(canvas.width / 2, canvas.height / 2)
+  ctx.rotate((degrees * Math.PI) / 180)
+  ctx.drawImage(bitmap, -bitmap.width / 2, -bitmap.height / 2)
+  bitmap.close()
+  const out = await new Promise<Blob | null>((resolve) =>
+    canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92),
+  )
+  return out ?? blob
 }
 
 /** Upscale + light contrast so thin cover text is easier for Tesseract. */
@@ -82,6 +105,10 @@ export function CoverScanner({
   const [progress, setProgress] = useState<number | null>(null)
   const [progressLabel, setProgressLabel] = useState('Reading cover…')
   const [preview, setPreview] = useState<string | null>(null)
+  const [lastBlob, setLastBlob] = useState<Blob | null>(null)
+  const [cropSrc, setCropSrc] = useState<string | null>(null)
+  const [textChoices, setTextChoices] = useState<string[] | null>(null)
+  const [pendingResult, setPendingResult] = useState<OcrResult | null>(null)
   const [cameraOn, setCameraOn] = useState(Boolean(initialStream))
   const [startingCamera, setStartingCamera] = useState(false)
   const [ocrLanguage, setOcrLanguage] = useState(() =>
@@ -122,6 +149,7 @@ export function CoverScanner({
   }, [cameraOn])
 
   const runOcr = async (file: Blob, previewUrl: string) => {
+    setLastBlob(file)
     setPreview(previewUrl)
     setProgress(0)
     setProgressLabel('Preparing image…')
@@ -152,7 +180,14 @@ export function CoverScanner({
         )
         return
       }
-      onRecognized({ text, blob: file, previewUrl })
+      const result = { text, blob: file, previewUrl }
+      const choices = splitOcrCandidates(text)
+      if (choices.length > 1) {
+        setPendingResult(result)
+        setTextChoices(choices)
+        return
+      }
+      onRecognized(result)
     } catch (err) {
       onError?.(
         err instanceof Error ? err.message : 'Could not read the cover',
@@ -164,7 +199,9 @@ export function CoverScanner({
 
   const handleFile = async (file: File) => {
     const previewUrl = URL.createObjectURL(file)
-    await runOcr(file, previewUrl)
+    setCropSrc(previewUrl)
+    setLastBlob(file)
+    setPreview(previewUrl)
   }
 
   const startCamera = () => {
@@ -211,10 +248,70 @@ export function CoverScanner({
     ownsStreamRef.current = false
     setCameraOn(false)
     const previewUrl = URL.createObjectURL(blob)
-    await runOcr(blob, previewUrl)
+    setCropSrc(previewUrl)
+    setLastBlob(blob)
+    setPreview(previewUrl)
   }
 
   const recognizing = progress !== null
+
+  if (cropSrc) {
+    return (
+      <ImageCropper
+        src={cropSrc}
+        onCancel={() => {
+          setCropSrc(null)
+          setPreview(null)
+          setLastBlob(null)
+        }}
+        onCrop={(blob, previewUrl) => {
+          setCropSrc(null)
+          void runOcr(blob, previewUrl)
+        }}
+      />
+    )
+  }
+
+  if (textChoices && pendingResult) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm font-medium">Which text is the right book?</p>
+        <p className="text-xs text-muted-foreground">
+          Multiple title-like blocks were found — pick one (useful for shelves
+          with several books in frame).
+        </p>
+        <ul className="space-y-2">
+          {textChoices.map((choice) => (
+            <li key={choice.slice(0, 40)}>
+              <button
+                type="button"
+                className="w-full rounded-xl border border-border bg-card px-3 py-2.5 text-left text-sm transition hover:border-primary/40 hover:bg-accent/40"
+                onClick={() => {
+                  onRecognized({ ...pendingResult, text: choice })
+                  setTextChoices(null)
+                  setPendingResult(null)
+                }}
+              >
+                <span className="whitespace-pre-wrap">{choice}</span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            onRecognized(pendingResult)
+            setTextChoices(null)
+            setPendingResult(null)
+          }}
+        >
+          Use all text
+        </Button>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-3">
@@ -332,7 +429,23 @@ export function CoverScanner({
           {progressLabel} {progress}%
         </div>
       ) : preview && !cameraOn ? (
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!lastBlob || recognizing}
+            onClick={() => {
+              if (!lastBlob) return
+              void (async () => {
+                const rotated = await rotateBlob(lastBlob, 90)
+                const url = URL.createObjectURL(rotated)
+                await runOcr(rotated, url)
+              })()
+            }}
+          >
+            <RotateCw className="h-4 w-4" />
+            Rotate
+          </Button>
           <Button
             type="button"
             variant="outline"

@@ -14,11 +14,20 @@ import {
   renameCategoryInList,
 } from '@/lib/categories'
 import {
+  collectCollections,
+  normalizeCollections,
+  removeCollectionFromList,
+  renameCollectionInList,
+} from '@/lib/collections'
+import {
   collectShelves,
   mergeLabels as mergeShelfLabels,
   normalizeShelf,
   normalizeShelves,
+  parseShelfCapacities,
+  type ShelfCapacityMap,
 } from '@/lib/shelves'
+import type { Json } from '@/lib/database.types'
 import type { Profile } from '@/types'
 
 function booksKey(userId: string | undefined) {
@@ -43,22 +52,37 @@ export function useLibraryTaxonomy() {
     () => normalizeShelves(profile?.shelf_locations ?? []),
     [profile?.shelf_locations],
   )
+  const managedCollections = useMemo(
+    () => normalizeCollections(profile?.collection_labels ?? []),
+    [profile?.collection_labels],
+  )
+  const shelfCapacities = useMemo(
+    () => parseShelfCapacities(profile?.shelf_capacities),
+    [profile?.shelf_capacities],
+  )
 
   const categoryOptions = useMemo(
     () =>
       mergeCategoryLabels(managedCategories, collectCategories(books ?? [])),
     [managedCategories, books],
   )
-
   const shelfOptions = useMemo(
     () => mergeShelfLabels(managedShelves, collectShelves(books ?? [])),
     [managedShelves, books],
   )
+  const collectionOptions = useMemo(() => {
+    const fromBooks = collectCollections(books ?? [])
+    return normalizeCollections([...managedCollections, ...fromBooks]).sort(
+      (a, b) => a.localeCompare(b),
+    )
+  }, [managedCollections, books])
 
   const saveTaxonomy = useMutation({
     mutationFn: async (patch: {
       category_labels?: string[]
       shelf_locations?: string[]
+      collection_labels?: string[]
+      shelf_capacities?: ShelfCapacityMap
     }): Promise<Profile> => {
       const { data, error } = await supabase
         .from('profiles')
@@ -68,6 +92,16 @@ export function useLibraryTaxonomy() {
             : {}),
           ...(patch.shelf_locations !== undefined
             ? { shelf_locations: normalizeShelves(patch.shelf_locations) }
+            : {}),
+          ...(patch.collection_labels !== undefined
+            ? {
+                collection_labels: normalizeCollections(
+                  patch.collection_labels,
+                ),
+              }
+            : {}),
+          ...(patch.shelf_capacities !== undefined
+            ? { shelf_capacities: patch.shelf_capacities as Json }
             : {}),
         })
         .eq('id', user!.id)
@@ -107,28 +141,30 @@ export function useLibraryTaxonomy() {
     toast.success(`Added “${label}”`)
   }
 
+  const addCollection = async (raw: string) => {
+    const label = normalizeCategory(raw)
+    if (!label) return
+    if (
+      managedCollections.some((c) => c.toLowerCase() === label.toLowerCase())
+    ) {
+      toast.info('That collection already exists')
+      return
+    }
+    await saveTaxonomy.mutateAsync({
+      collection_labels: [...managedCollections, label],
+    })
+    toast.success(`Added “${label}”`)
+  }
+
   const renameCategory = async (from: string, toRaw: string) => {
     const to = normalizeCategory(toRaw)
     if (!to || to.toLowerCase() === from.toLowerCase()) return
-    if (
-      managedCategories.some(
-        (c) =>
-          c.toLowerCase() === to.toLowerCase() &&
-          c.toLowerCase() !== from.toLowerCase(),
-      )
-    ) {
-      toast.error('Another category already uses that name')
-      return
-    }
-
     const nextLabels = managedCategories.map((c) =>
       c.toLowerCase() === from.toLowerCase() ? to : c,
     )
-
     const affected = (books ?? []).filter((b) =>
       (b.categories ?? []).some((c) => c.toLowerCase() === from.toLowerCase()),
     )
-
     for (const book of affected) {
       const { error } = await supabase
         .from('books')
@@ -138,9 +174,7 @@ export function useLibraryTaxonomy() {
         .eq('id', book.id)
       if (error) throw error
     }
-
     await saveTaxonomy.mutateAsync({ category_labels: nextLabels })
-
     qc.setQueryData<BookWithCreator[]>(booksKey(user?.id), (prev) =>
       (prev ?? []).map((b) => ({
         ...b,
@@ -153,50 +187,58 @@ export function useLibraryTaxonomy() {
   const renameShelf = async (from: string, toRaw: string) => {
     const to = normalizeShelf(toRaw)
     if (!to || to.toLowerCase() === from.toLowerCase()) return
-    if (
-      managedShelves.some(
-        (s) =>
-          s.toLowerCase() === to.toLowerCase() &&
-          s.toLowerCase() !== from.toLowerCase(),
-      )
-    ) {
-      toast.error('Another shelf already uses that name')
-      return
-    }
-
     const nextLabels = managedShelves.map((s) =>
       s.toLowerCase() === from.toLowerCase() ? to : s,
     )
-
     const { error: booksError } = await supabase
       .from('books')
       .update({ shelf_location: to })
       .eq('created_by', user!.id)
       .ilike('shelf_location', from)
     if (booksError) throw booksError
-
-    // Also update shared books the user can see that use this shelf name
-    // (owned by others) — best-effort; RLS may block some.
-    const shared = (books ?? []).filter(
-      (b) =>
-        b.created_by !== user!.id &&
-        (b.shelf_location ?? '').toLowerCase() === from.toLowerCase(),
-    )
-    for (const book of shared) {
-      await supabase
-        .from('books')
-        .update({ shelf_location: to })
-        .eq('id', book.id)
+    const nextCaps = { ...shelfCapacities }
+    if (nextCaps[from] != null) {
+      nextCaps[to] = nextCaps[from]
+      delete nextCaps[from]
     }
-
-    await saveTaxonomy.mutateAsync({ shelf_locations: nextLabels })
-
+    await saveTaxonomy.mutateAsync({
+      shelf_locations: nextLabels,
+      shelf_capacities: nextCaps,
+    })
     qc.setQueryData<BookWithCreator[]>(booksKey(user?.id), (prev) =>
       (prev ?? []).map((b) =>
         (b.shelf_location ?? '').toLowerCase() === from.toLowerCase()
           ? { ...b, shelf_location: to }
           : b,
       ),
+    )
+    toast.success(`Renamed to “${to}”`)
+  }
+
+  const renameCollection = async (from: string, toRaw: string) => {
+    const to = normalizeCategory(toRaw)
+    if (!to || to.toLowerCase() === from.toLowerCase()) return
+    const nextLabels = managedCollections.map((c) =>
+      c.toLowerCase() === from.toLowerCase() ? to : c,
+    )
+    const affected = (books ?? []).filter((b) =>
+      (b.collections ?? []).some((c) => c.toLowerCase() === from.toLowerCase()),
+    )
+    for (const book of affected) {
+      const { error } = await supabase
+        .from('books')
+        .update({
+          collections: renameCollectionInList(book.collections, from, to),
+        })
+        .eq('id', book.id)
+      if (error) throw error
+    }
+    await saveTaxonomy.mutateAsync({ collection_labels: nextLabels })
+    qc.setQueryData<BookWithCreator[]>(booksKey(user?.id), (prev) =>
+      (prev ?? []).map((b) => ({
+        ...b,
+        collections: renameCollectionInList(b.collections, from, to),
+      })),
     )
     toast.success(`Renamed to “${to}”`)
   }
@@ -208,7 +250,6 @@ export function useLibraryTaxonomy() {
     const affected = (books ?? []).filter((b) =>
       (b.categories ?? []).some((c) => c.toLowerCase() === label.toLowerCase()),
     )
-
     for (const book of affected) {
       const { error } = await supabase
         .from('books')
@@ -218,9 +259,7 @@ export function useLibraryTaxonomy() {
         .eq('id', book.id)
       if (error) throw error
     }
-
     await saveTaxonomy.mutateAsync({ category_labels: nextLabels })
-
     qc.setQueryData<BookWithCreator[]>(booksKey(user?.id), (prev) =>
       (prev ?? []).map((b) => ({
         ...b,
@@ -234,16 +273,18 @@ export function useLibraryTaxonomy() {
     const nextLabels = managedShelves.filter(
       (s) => s.toLowerCase() !== label.toLowerCase(),
     )
-
     const { error: booksError } = await supabase
       .from('books')
       .update({ shelf_location: null })
       .eq('created_by', user!.id)
       .ilike('shelf_location', label)
     if (booksError) throw booksError
-
-    await saveTaxonomy.mutateAsync({ shelf_locations: nextLabels })
-
+    const nextCaps = { ...shelfCapacities }
+    delete nextCaps[label]
+    await saveTaxonomy.mutateAsync({
+      shelf_locations: nextLabels,
+      shelf_capacities: nextCaps,
+    })
     qc.setQueryData<BookWithCreator[]>(booksKey(user?.id), (prev) =>
       (prev ?? []).map((b) =>
         (b.shelf_location ?? '').toLowerCase() === label.toLowerCase()
@@ -254,19 +295,54 @@ export function useLibraryTaxonomy() {
     toast.success(`Removed “${label}”`)
   }
 
-  /** Import labels found on books into the managed lists (one-time helper). */
+  const removeCollection = async (label: string) => {
+    const nextLabels = managedCollections.filter(
+      (c) => c.toLowerCase() !== label.toLowerCase(),
+    )
+    const affected = (books ?? []).filter((b) =>
+      (b.collections ?? []).some((c) => c.toLowerCase() === label.toLowerCase()),
+    )
+    for (const book of affected) {
+      const { error } = await supabase
+        .from('books')
+        .update({
+          collections: removeCollectionFromList(book.collections, label),
+        })
+        .eq('id', book.id)
+      if (error) throw error
+    }
+    await saveTaxonomy.mutateAsync({ collection_labels: nextLabels })
+    qc.setQueryData<BookWithCreator[]>(booksKey(user?.id), (prev) =>
+      (prev ?? []).map((b) => ({
+        ...b,
+        collections: removeCollectionFromList(b.collections, label),
+      })),
+    )
+    toast.success(`Removed “${label}”`)
+  }
+
+  const setShelfCapacity = async (shelf: string, capacity: number | null) => {
+    const next = { ...shelfCapacities }
+    if (capacity == null || capacity <= 0) delete next[shelf]
+    else next[shelf] = capacity
+    await saveTaxonomy.mutateAsync({ shelf_capacities: next })
+    toast.success('Shelf capacity updated')
+  }
+
   const importFromBooks = async () => {
-    const nextCategories = mergeCategoryLabels(
-      managedCategories,
-      collectCategories(books ?? []),
-    )
-    const nextShelves = mergeShelfLabels(
-      managedShelves,
-      collectShelves(books ?? []),
-    )
     await saveTaxonomy.mutateAsync({
-      category_labels: nextCategories,
-      shelf_locations: nextShelves,
+      category_labels: mergeCategoryLabels(
+        managedCategories,
+        collectCategories(books ?? []),
+      ),
+      shelf_locations: mergeShelfLabels(
+        managedShelves,
+        collectShelves(books ?? []),
+      ),
+      collection_labels: normalizeCollections([
+        ...managedCollections,
+        ...collectCollections(books ?? []),
+      ]),
     })
     toast.success('Imported labels from your books')
   }
@@ -274,15 +350,22 @@ export function useLibraryTaxonomy() {
   return {
     managedCategories,
     managedShelves,
+    managedCollections,
+    shelfCapacities,
     categoryOptions,
     shelfOptions,
+    collectionOptions,
     isSaving: saveTaxonomy.isPending,
     addCategory,
     addShelf,
+    addCollection,
     renameCategory,
     renameShelf,
+    renameCollection,
     removeCategory,
     removeShelf,
+    removeCollection,
+    setShelfCapacity,
     importFromBooks,
   }
 }

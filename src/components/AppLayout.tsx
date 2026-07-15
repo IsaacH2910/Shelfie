@@ -1,12 +1,27 @@
 import { Suspense } from 'react'
 import { Link, NavLink, Outlet } from 'react-router-dom'
-import { BookMarked, Library, Plus, Settings, Users } from 'lucide-react'
+import {
+  BarChart3,
+  BookMarked,
+  Library,
+  MapPin,
+  Plus,
+  Settings,
+  ShoppingBag,
+  Users,
+} from 'lucide-react'
+import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
+import { LoanReminders } from '@/components/LoanReminders'
+import { Onboarding } from '@/components/Onboarding'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { FullScreenLoader } from '@/components/Spinner'
 import { cn } from '@/lib/utils'
 
 const NAV_ITEMS = [
   { to: '/', label: 'Library', icon: Library, end: true },
+  { to: '/stats', label: 'Stats', icon: BarChart3, end: false },
+  { to: '/shelves', label: 'Shelves', icon: MapPin, end: false },
+  { to: '/shop', label: 'Shop', icon: ShoppingBag, end: false },
   { to: '/household', label: 'Household', icon: Users, end: false },
   { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ]
@@ -25,6 +40,15 @@ function Brand() {
 export function AppLayout() {
   return (
     <div className="min-h-screen bg-background">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-sm focus:text-primary-foreground"
+      >
+        Skip to content
+      </a>
+      <KeyboardShortcuts />
+      <Onboarding />
+      <LoanReminders />
       {/* Desktop sidebar */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-border bg-card/40 px-4 py-5 md:flex">
         <div className="px-2">
@@ -71,7 +95,7 @@ export function AppLayout() {
       </header>
 
       {/* Content */}
-      <main className="md:pl-60">
+      <main id="main-content" className="md:pl-60" tabIndex={-1}>
         <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:pb-12 md:pt-8">
           <Suspense fallback={<FullScreenLoader />}>
             <Outlet />
@@ -82,7 +106,7 @@ export function AppLayout() {
       {/* Mobile bottom navigation */}
       <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 grid grid-cols-4 items-center border-t border-border bg-background/90 px-2 pt-1.5 backdrop-blur-md md:hidden">
         <BottomTab to="/" label="Library" icon={Library} end />
-        <BottomTab to="/household" label="Household" icon={Users} />
+        <BottomTab to="/stats" label="Stats" icon={BarChart3} />
         <div className="flex items-center justify-center">
           <Link
             to="/add"

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Barcode, RefreshCw, Users } from 'lucide-react'
+import { Barcode, Heart, RefreshCw, Users } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,10 +16,14 @@ import {
 } from '@/components/ui/select'
 import { LanguageSelect } from '@/components/LanguageSelect'
 import { CategoryInput } from '@/components/CategoryInput'
+import { CollectionInput } from '@/components/CollectionInput'
 import { ShelfSelect } from '@/components/ShelfSelect'
 import { ReadingStatusSelect } from '@/components/ReadingStatusSelect'
 import { ReadingProgressFields } from '@/components/ReadingProgressFields'
 import { StarRating } from '@/components/StarRating'
+import { OWNERSHIP_OPTIONS } from '@/lib/ownership'
+import { detectSeriesFromTitle } from '@/lib/series'
+import type { Ownership } from '@/types'
 import { CoverImage } from '@/components/CoverImage'
 import { CoverUpload } from '@/components/CoverUpload'
 import { DuplicateWarning } from '@/components/DuplicateWarning'
@@ -180,7 +184,8 @@ export function BookForm({
   }
 
   const canSubmit = value.title.trim().length > 0 && !submitting
-  const { categoryOptions, shelfOptions } = useLibraryTaxonomy()
+  const { categoryOptions, shelfOptions, collectionOptions } =
+    useLibraryTaxonomy()
 
   return (
     <form
@@ -290,12 +295,99 @@ export function BookForm({
         disabled={submitting}
       />
 
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="ownership">List</Label>
+          <Select
+            value={value.ownership}
+            onValueChange={(ownership) =>
+              patch({ ownership: ownership as Ownership })
+            }
+            disabled={submitting}
+          >
+            <SelectTrigger id="ownership">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {OWNERSHIP_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="flex items-end">
+          <button
+            type="button"
+            disabled={submitting}
+            onClick={() => patch({ is_favorite: !value.is_favorite })}
+            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition hover:bg-accent"
+            aria-pressed={value.is_favorite}
+          >
+            <Heart
+              className={`h-4 w-4 ${value.is_favorite ? 'fill-red-500 text-red-500' : 'text-muted-foreground'}`}
+            />
+            {value.is_favorite ? 'Favorited' : 'Favorite'}
+          </button>
+        </div>
+      </div>
+
       <CategoryInput
         value={value.categories}
         onChange={(categories) => patch({ categories })}
         options={categoryOptions}
         disabled={submitting}
       />
+
+      <CollectionInput
+        value={value.collections}
+        onChange={(collections) => patch({ collections })}
+        options={collectionOptions}
+        disabled={submitting}
+      />
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div className="space-y-1.5">
+          <Label htmlFor="series">Series</Label>
+          <Input
+            id="series"
+            value={value.series}
+            onChange={(e) => patch({ series: e.target.value })}
+            placeholder="e.g. Harry Potter #1"
+            disabled={submitting}
+            autoComplete="off"
+          />
+          {!value.series.trim() && detectSeriesFromTitle(value.title) ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-primary hover:underline"
+              onClick={() => {
+                const detected = detectSeriesFromTitle(value.title)
+                if (!detected) return
+                patch({
+                  series: detected.number
+                    ? `${detected.series} #${detected.number}`
+                    : detected.series,
+                })
+              }}
+            >
+              Use detected series from title
+            </button>
+          ) : null}
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="publisher">Publisher</Label>
+          <Input
+            id="publisher"
+            value={value.publisher}
+            onChange={(e) => patch({ publisher: e.target.value })}
+            placeholder="Optional"
+            disabled={submitting}
+            autoComplete="off"
+          />
+        </div>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <ReadingStatusSelect
@@ -381,6 +473,18 @@ export function BookForm({
       )}
 
       <div className="space-y-1.5">
+        <Label htmlFor="review">Personal review (optional)</Label>
+        <Textarea
+          id="review"
+          value={value.review}
+          onChange={(e) => patch({ review: e.target.value })}
+          placeholder="What did you think?"
+          rows={3}
+          disabled={submitting}
+        />
+      </div>
+
+      <div className="space-y-1.5">
         <Label htmlFor="notes">Notes (optional)</Label>
         <Textarea
           id="notes"
@@ -388,6 +492,7 @@ export function BookForm({
           onChange={(e) => patch({ notes: e.target.value })}
           placeholder="Edition, condition, who it belongs to…"
           rows={3}
+          disabled={submitting}
         />
       </div>
 

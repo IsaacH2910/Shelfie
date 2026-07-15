@@ -1,6 +1,16 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { BookPlus, LibraryBig, ScanBarcode, Search } from 'lucide-react'
+import { toast } from 'sonner'
+import {
+  BookPlus,
+  CheckSquare,
+  Heart,
+  LibraryBig,
+  ScanBarcode,
+  Search,
+  Square,
+  Trash2,
+} from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -12,21 +22,35 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { BookCard } from '@/components/BookCard'
+import { VirtualBookGrid } from '@/components/VirtualBookGrid'
 import { LibraryDashboard } from '@/components/LibraryDashboard'
 import { BackendUnavailable } from '@/components/BackendUnavailable'
 import { EmptyState } from '@/components/EmptyState'
-import { useBooks } from '@/hooks/useBooks'
+import {
+  useBooks,
+  useDeleteBooks,
+  usePatchBooks,
+  useRestoreBooks,
+  type BookWithCreator,
+} from '@/hooks/useBooks'
 import { useAuth } from '@/context/AuthProvider'
+import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
 import {
   bookHasCategory,
   collectCategories,
 } from '@/lib/categories'
+import {
+  bookHasCollection,
+  collectCollections,
+} from '@/lib/collections'
 import { collectShelves } from '@/lib/shelves'
 import {
   READING_STATUSES,
   READING_STATUS_META,
   type ReadingStatus,
 } from '@/lib/reading'
+import { OWNERSHIP_OPTIONS } from '@/lib/ownership'
+import type { Ownership } from '@/types'
 import { getLanguage, normalizeLanguageCode } from '@/lib/languages'
 import { normalizeIsbn, normalizeText } from '@/lib/duplicates'
 import { cn } from '@/lib/utils'
@@ -34,6 +58,7 @@ import { cn } from '@/lib/utils'
 type Scope = 'all' | 'mine' | 'shared'
 type Sort = 'recent' | 'title' | 'author' | 'rating'
 type StatusFilter = 'all' | ReadingStatus
+type OwnershipFilter = 'all' | Ownership | 'favorites'
 
 const SCOPES: { value: Scope; label: string }[] = [
   { value: 'all', label: 'All' },
@@ -50,13 +75,22 @@ export default function LibraryPage() {
     isFetching,
   } = useBooks()
   const { user } = useAuth()
+  const { shelfOptions, collectionOptions } = useLibraryTaxonomy()
+  const patchBooks = usePatchBooks()
+  const deleteBooks = useDeleteBooks()
+  const restoreBooks = useRestoreBooks()
+
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState<Scope>('all')
   const [language, setLanguage] = useState('all')
   const [category, setCategory] = useState('all')
+  const [collection, setCollection] = useState('all')
   const [shelf, setShelf] = useState('all')
   const [status, setStatus] = useState<StatusFilter>('all')
+  const [ownership, setOwnership] = useState<OwnershipFilter>('all')
   const [sort, setSort] = useState<Sort>('recent')
+  const [selecting, setSelecting] = useState(false)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
 
   const languagesPresent = useMemo(() => {
     const codes = new Set<string>()
@@ -70,11 +104,11 @@ export default function LibraryPage() {
     () => collectCategories(books ?? []),
     [books],
   )
-
-  const shelvesPresent = useMemo(
-    () => collectShelves(books ?? []),
+  const collectionsPresent = useMemo(
+    () => collectCollections(books ?? []),
     [books],
   )
+  const shelvesPresent = useMemo(() => collectShelves(books ?? []), [books])
 
   const statusesPresent = useMemo(() => {
     const seen = new Set<string>()
@@ -96,12 +130,21 @@ export default function LibraryPage() {
       )
         return false
       if (category !== 'all' && !bookHasCategory(book, category)) return false
+      if (collection !== 'all' && !bookHasCollection(book, collection))
+        return false
       if (
         shelf !== 'all' &&
         (book.shelf_location ?? '').toLowerCase() !== shelf.toLowerCase()
       )
         return false
       if (status !== 'all' && book.reading_status !== status) return false
+      if (ownership === 'favorites' && !book.is_favorite) return false
+      if (
+        ownership !== 'all' &&
+        ownership !== 'favorites' &&
+        (book.ownership ?? 'owned') !== ownership
+      )
+        return false
       if (!q && !isbnQ) return true
       const matchesIsbn =
         isbnQ.length > 0 && normalizeIsbn(book.isbn).includes(isbnQ)
@@ -113,21 +156,100 @@ export default function LibraryPage() {
         matchesCategory ||
         normalizeText(book.title).includes(q) ||
         normalizeText(book.author).includes(q) ||
-        normalizeText(book.shelf_location).includes(q)
+        normalizeText(book.shelf_location).includes(q) ||
+        normalizeText(book.series).includes(q) ||
+        normalizeText(book.publisher).includes(q)
       )
     })
     list = [...list].sort((a, b) => {
       if (sort === 'title') return a.title.localeCompare(b.title)
       if (sort === 'author')
         return (a.author ?? '').localeCompare(b.author ?? '')
-      if (sort === 'rating')
-        return (b.rating ?? 0) - (a.rating ?? 0)
+      if (sort === 'rating') return (b.rating ?? 0) - (a.rating ?? 0)
       return b.created_at.localeCompare(a.created_at)
     })
     return list
-  }, [books, query, scope, language, category, shelf, status, sort, user?.id])
+  }, [
+    books,
+    query,
+    scope,
+    language,
+    category,
+    collection,
+    shelf,
+    status,
+    ownership,
+    sort,
+    user?.id,
+  ])
 
   const total = books?.length ?? 0
+  const selectedIds = [...selected]
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  const exitSelect = () => {
+    setSelecting(false)
+    setSelected(new Set())
+  }
+
+  const bulkDelete = async () => {
+    if (selectedIds.length === 0) return
+    const snapshot = (books ?? []).filter((b) => selected.has(b.id))
+    try {
+      await deleteBooks.mutateAsync(selectedIds)
+      exitSelect()
+      toast.success(`Removed ${snapshot.length} books`, {
+        action: {
+          label: 'Undo',
+          onClick: () => {
+            void restoreBooks
+              .mutateAsync(snapshot)
+              .then(() => toast.success('Restored'))
+              .catch((e) =>
+                toast.error(e instanceof Error ? e.message : 'Could not undo'),
+              )
+          },
+        },
+        duration: 7000,
+      })
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete')
+    }
+  }
+
+  const bulkFavorite = async () => {
+    try {
+      await patchBooks.mutateAsync({
+        ids: selectedIds,
+        patch: { is_favorite: true },
+      })
+      toast.success('Marked as favorites')
+      exitSelect()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update')
+    }
+  }
+
+  const bulkMoveShelf = async (shelf_location: string) => {
+    try {
+      await patchBooks.mutateAsync({
+        ids: selectedIds,
+        patch: { shelf_location: shelf_location || null },
+      })
+      toast.success('Moved to shelf')
+      exitSelect()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not update')
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -141,6 +263,26 @@ export default function LibraryPage() {
           </p>
         </div>
         <div className="flex shrink-0 gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() =>
+              selecting ? exitSelect() : setSelecting(true)
+            }
+            className="hidden sm:inline-flex"
+          >
+            {selecting ? (
+              <>
+                <Square className="h-4 w-4" />
+                Cancel
+              </>
+            ) : (
+              <>
+                <CheckSquare className="h-4 w-4" />
+                Select
+              </>
+            )}
+          </Button>
           <Button asChild variant="outline" size="sm" className="md:hidden">
             <Link to="/add?scan=barcode">
               <ScanBarcode className="h-4 w-4" />
@@ -166,7 +308,7 @@ export default function LibraryPage() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search title, author, ISBN, shelf or category…"
+            placeholder="Search title, author, ISBN, series, shelf…"
             className="pl-9"
             type="search"
             data-testid="library-search"
@@ -190,6 +332,24 @@ export default function LibraryPage() {
               </button>
             ))}
           </div>
+
+          <Select
+            value={ownership}
+            onValueChange={(v) => setOwnership(v as OwnershipFilter)}
+          >
+            <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+              <SelectValue placeholder="List" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All lists</SelectItem>
+              <SelectItem value="favorites">Favorites</SelectItem>
+              {OWNERSHIP_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value}>
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
 
           {statusesPresent.length > 0 ? (
             <Select
@@ -245,6 +405,22 @@ export default function LibraryPage() {
             </Select>
           ) : null}
 
+          {collectionsPresent.length > 0 ? (
+            <Select value={collection} onValueChange={setCollection}>
+              <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                <SelectValue placeholder="Collection" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All collections</SelectItem>
+                {collectionsPresent.map((label) => (
+                  <SelectItem key={label.toLowerCase()} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+
           {shelvesPresent.length > 0 ? (
             <Select value={shelf} onValueChange={setShelf}>
               <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
@@ -275,6 +451,74 @@ export default function LibraryPage() {
         </div>
       </div>
 
+      {selecting && selectedIds.length > 0 ? (
+        <div className="sticky top-14 z-10 flex flex-wrap items-center gap-2 rounded-xl border border-border bg-background/95 p-2.5 shadow-sm backdrop-blur md:top-4">
+          <span className="px-1 text-sm font-medium">
+            {selectedIds.length} selected
+          </span>
+          <Button size="sm" variant="outline" onClick={() => void bulkFavorite()}>
+            <Heart className="h-4 w-4" />
+            Favorite
+          </Button>
+          {shelfOptions.length > 0 ? (
+            <Select onValueChange={(v) => void bulkMoveShelf(v)}>
+              <SelectTrigger className="h-8 w-auto min-w-[8rem] text-sm">
+                <SelectValue placeholder="Move shelf" />
+              </SelectTrigger>
+              <SelectContent>
+                {shelfOptions.map((label) => (
+                  <SelectItem key={label} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          {collectionOptions[0] ? (
+            <Select
+              onValueChange={(label) => {
+                const ids = selectedIds
+                const current = (books ?? []).filter((b) => ids.includes(b.id))
+                void Promise.all(
+                  current.map((book) =>
+                    patchBooks.mutateAsync({
+                      ids: [book.id],
+                      patch: {
+                        collections: [
+                          ...new Set([...(book.collections ?? []), label]),
+                        ],
+                      },
+                    }),
+                  ),
+                ).then(() => {
+                  toast.success(`Added to ${label}`)
+                  exitSelect()
+                })
+              }}
+            >
+              <SelectTrigger className="h-8 w-auto min-w-[8rem] text-sm">
+                <SelectValue placeholder="Add collection" />
+              </SelectTrigger>
+              <SelectContent>
+                {collectionOptions.map((label) => (
+                  <SelectItem key={label} value={label}>
+                    {label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          ) : null}
+          <Button
+            size="sm"
+            variant="destructive"
+            onClick={() => void bulkDelete()}
+          >
+            <Trash2 className="h-4 w-4" />
+            Delete
+          </Button>
+        </div>
+      ) : null}
+
       {isBackendUnavailable ? (
         <BackendUnavailable
           onRetry={() => void refetch()}
@@ -295,14 +539,19 @@ export default function LibraryPage() {
           <EmptyState
             icon={<LibraryBig />}
             title="Your shelf is empty"
-            description="Add your first book by scanning its barcode, snapping the cover, or entering the details by hand."
+            description="Scan a barcode, snap a cover, import a CSV, or add details by hand."
             action={
-              <Button asChild>
-                <Link to="/add">
-                  <BookPlus className="h-4 w-4" />
-                  Add a book
-                </Link>
-              </Button>
+              <div className="flex flex-wrap justify-center gap-2">
+                <Button asChild>
+                  <Link to="/add?scan=barcode">
+                    <ScanBarcode className="h-4 w-4" />
+                    Scan first book
+                  </Link>
+                </Button>
+                <Button asChild variant="outline">
+                  <Link to="/settings#import-export">Import library</Link>
+                </Button>
+              </div>
             }
           />
         ) : (
@@ -313,12 +562,64 @@ export default function LibraryPage() {
           />
         )
       ) : (
-        <div className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6">
-          {filtered.map((book) => (
-            <BookCard key={book.id} book={book} />
-          ))}
-        </div>
+        <VirtualBookGrid
+          items={filtered}
+          getKey={(book) => book.id}
+          renderItem={(book) => (
+            <SelectableCard
+              book={book}
+              selecting={selecting}
+              selected={selected.has(book.id)}
+              onToggle={() => toggleSelect(book.id)}
+            />
+          )}
+        />
       )}
     </div>
+  )
+}
+
+function SelectableCard({
+  book,
+  selecting,
+  selected,
+  onToggle,
+}: {
+  book: BookWithCreator
+  selecting: boolean
+  selected: boolean
+  onToggle: () => void
+}) {
+  if (!selecting) {
+    return (
+      <div style={{ contentVisibility: 'auto', containIntrinsicSize: '200px' }}>
+        <BookCard book={book} />
+      </div>
+    )
+  }
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={cn(
+        'relative rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        selected && 'ring-2 ring-primary',
+      )}
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '200px' }}
+    >
+      <span
+        className={cn(
+          'absolute left-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-md border bg-background/90',
+          selected
+            ? 'border-primary bg-primary text-primary-foreground'
+            : 'border-border',
+        )}
+      >
+        {selected ? <CheckSquare className="h-3.5 w-3.5" /> : null}
+      </span>
+      <div className="pointer-events-none">
+        <BookCard book={book} />
+      </div>
+    </button>
   )
 }

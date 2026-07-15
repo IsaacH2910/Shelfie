@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { toast } from 'sonner'
+import { Link } from 'react-router-dom'
 import {
   Check,
   Download,
+  FolderOpen,
+  Link2,
   LogOut,
   MapPin,
   Monitor,
@@ -10,6 +13,7 @@ import {
   Share,
   Sun,
   Tag,
+  Bug,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -22,13 +26,16 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { TaxonomyManager } from '@/components/TaxonomyManager'
+import { ImportExportPanel } from '@/components/ImportExportPanel'
+import { CrashLogPanel } from '@/components/CrashLogPanel'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/context/AuthProvider'
 import { useProfile, useUpdateProfile } from '@/hooks/useProfile'
 import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
 import { usePwaInstall } from '@/hooks/usePwaInstall'
 import { collectCategories } from '@/lib/categories'
-import { collectShelves } from '@/lib/shelves'
+import { DEFAULT_COLLECTIONS } from '@/lib/collections'
+import { collectShelves, SHELF_SEP } from '@/lib/shelves'
 import { useBooks } from '@/hooks/useBooks'
 import { cn } from '@/lib/utils'
 
@@ -177,11 +184,49 @@ export default function SettingsPage() {
           ) : null}
           <TaxonomyManager
             labels={taxonomy.managedShelves}
-            emptyHint="Add places like “Living room · Shelf A” or “Bedroom nightstand”."
-            addPlaceholder="e.g. Living room · Shelf A"
+            emptyHint={`Use “${SHELF_SEP.trim()}” for hierarchy, e.g. Living room${SHELF_SEP}Shelf A.`}
+            addPlaceholder={`e.g. Living room${SHELF_SEP}Shelf A`}
             onAdd={taxonomy.addShelf}
             onRename={taxonomy.renameShelf}
             onRemove={taxonomy.removeShelf}
+            busy={taxonomy.isSaving}
+          />
+          <p className="text-xs text-muted-foreground">
+            Set capacities and browse a shelf map on{' '}
+            <Link to="/shelves" className="font-medium text-primary hover:underline">
+              Shelves
+            </Link>
+            .
+          </p>
+        </CardContent>
+      </Card>
+
+      <Card id="collections">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FolderOpen className="h-4 w-4 text-muted-foreground" />
+            Collections
+          </CardTitle>
+          <CardDescription>
+            Group books beyond categories — Favorites, School, Signed Copies…
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          {taxonomy.managedCollections.length === 0 ? (
+            <QuickStart
+              label="Try these"
+              suggestions={[...DEFAULT_COLLECTIONS].slice(0, 6)}
+              onPick={(label) => void taxonomy.addCollection(label)}
+              disabled={taxonomy.isSaving}
+            />
+          ) : null}
+          <TaxonomyManager
+            labels={taxonomy.managedCollections}
+            emptyHint="Create collections you reuse often."
+            addPlaceholder="e.g. Signed Copies"
+            onAdd={taxonomy.addCollection}
+            onRename={taxonomy.renameCollection}
+            onRemove={taxonomy.removeCollection}
             busy={taxonomy.isSaving}
           />
         </CardContent>
@@ -239,6 +284,37 @@ export default function SettingsPage() {
               </button>
             </div>
           ) : null}
+        </CardContent>
+      </Card>
+
+      <Card id="import-export">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Link2 className="h-4 w-4 text-muted-foreground" />
+            Import & export
+          </CardTitle>
+          <CardDescription>
+            Back up your library or bring books from CSV / JSON (including
+            Goodreads exports).
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <ImportExportPanel />
+        </CardContent>
+      </Card>
+
+      <Card id="diagnostics">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Bug className="h-4 w-4 text-muted-foreground" />
+            Diagnostics
+          </CardTitle>
+          <CardDescription>
+            Local crash log for this device — export if something breaks.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CrashLogPanel />
         </CardContent>
       </Card>
 

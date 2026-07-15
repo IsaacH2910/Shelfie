@@ -6,7 +6,9 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BookForm } from '@/components/BookForm'
 import { BarcodeScanner } from '@/components/BarcodeScanner'
+import { BatchBarcodeScanner } from '@/components/BatchBarcodeScanner'
 import { CoverScanner, type OcrResult } from '@/components/CoverScanner'
+import { lookupByIsbn } from '@/lib/bookLookup'
 import { CoverImage } from '@/components/CoverImage'
 import { LanguageBadge } from '@/components/LanguageBadge'
 import { Spinner } from '@/components/Spinner'
@@ -30,7 +32,7 @@ function isJapaneseClassificationCode(isbn: string): boolean {
 }
 
 /** Which optional camera assist is open. The form is always the source of truth. */
-type Assist = 'none' | 'barcode' | 'photo'
+type Assist = 'none' | 'barcode' | 'photo' | 'batch'
 
 const EMPTY_DRAFT: BookDraft = {
   title: '',
@@ -39,7 +41,9 @@ const EMPTY_DRAFT: BookDraft = {
   language: '',
   shelf_location: '',
   categories: [],
+  collections: [],
   notes: '',
+  review: '',
   cover_url: null,
   source: 'manual',
   scope: 'private',
@@ -50,6 +54,11 @@ const EMPTY_DRAFT: BookDraft = {
   current_page: null,
   reading_started_at: null,
   reading_finished_at: null,
+  ownership: 'owned',
+  is_favorite: false,
+  series: '',
+  publisher: '',
+  published_year: null,
 }
 
 function buildQuery(text: string): string {
@@ -272,7 +281,45 @@ export default function AddBookPage() {
         <h1 className="text-xl font-bold tracking-tight">Add a book</h1>
       </div>
 
-      {assist === 'barcode' ? (
+      {assist === 'batch' ? (
+        <BatchBarcodeScanner
+          onCancel={closeAssist}
+          onDone={(isbns) => {
+            void (async () => {
+              setSaving(true)
+              let added = 0
+              try {
+                for (const isbn of isbns) {
+                  const result = await lookupByIsbn(isbn).catch(() => null)
+                  await createBook.mutateAsync({
+                    ...EMPTY_DRAFT,
+                    title: result?.title || `ISBN ${isbn}`,
+                    author: result?.author || '',
+                    isbn: result?.isbn || isbn,
+                    language: result?.language || '',
+                    cover_url: result?.cover_url ?? null,
+                    source: 'barcode',
+                  })
+                  added++
+                }
+                toast.success(
+                  `Added ${added} book${added === 1 ? '' : 's'} from batch scan`,
+                )
+                navigate('/')
+              } catch (err) {
+                toast.error(
+                  err instanceof Error
+                    ? err.message
+                    : `Stopped after ${added} books`,
+                )
+              } finally {
+                setSaving(false)
+                closeAssist()
+              }
+            })()
+          }}
+        />
+      ) : assist === 'barcode' ? (
         <div className="space-y-3">
           {openingCamera && !barcodeStream ? (
             <div className="flex aspect-[3/4] w-full flex-col items-center justify-center gap-2 rounded-2xl bg-black text-white/90">
@@ -412,6 +459,14 @@ export default function AddBookPage() {
               </span>
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => setAssist('batch')}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border px-4 py-3 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+          >
+            <ScanBarcode className="h-4 w-4" />
+            Batch scan many barcodes
+          </button>
 
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
