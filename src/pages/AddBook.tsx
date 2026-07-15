@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
-import { ArrowLeft, ScanBarcode, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, Layers, ScanBarcode, Sparkles, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { BookForm } from '@/components/BookForm'
@@ -16,7 +16,12 @@ import { useBooks, useCreateBook } from '@/hooks/useBooks'
 import { useHouseholds } from '@/hooks/useHouseholds'
 import { useAuth } from '@/context/AuthProvider'
 import { searchBooks, type LookupResult } from '@/lib/bookLookup'
-import { findDuplicates, normalizeIsbn, toLookupIsbn } from '@/lib/duplicates'
+import {
+  findDuplicates,
+  isLookupIsbn,
+  normalizeIsbn,
+  toLookupIsbn,
+} from '@/lib/duplicates'
 import { friendlyCameraError, openCameraStream, stopStream } from '@/lib/camera'
 import { uploadCover } from '@/lib/storage'
 import type { BookDraft } from '@/types'
@@ -80,9 +85,13 @@ export default function AddBookPage() {
   const createBook = useCreateBook()
 
   const [draft, setDraft] = useState<BookDraft>(EMPTY_DRAFT)
-  const [assist, setAssist] = useState<Assist>(() =>
-    searchParams.get('scan') === 'barcode' ? 'barcode' : 'none',
-  )
+  const [assist, setAssist] = useState<Assist>(() => {
+    const scan = searchParams.get('scan')
+    if (scan === 'barcode') return 'barcode'
+    if (scan === 'batch') return 'batch'
+    if (scan === 'photo' || scan === 'ocr') return 'photo'
+    return 'none'
+  })
   const [manualIsbn, setManualIsbn] = useState('')
   const [saving, setSaving] = useState(false)
   const [searching, setSearching] = useState(false)
@@ -95,8 +104,68 @@ export default function AddBookPage() {
   const existingBooks = useMemo(() => books ?? [], [books])
 
   useEffect(() => {
-    if (searchParams.get('scan') === 'barcode') {
+    const scan = searchParams.get('scan')
+    if (scan === 'barcode') {
       setAssist('barcode')
+      setOpeningCamera(true)
+      void openCameraStream()
+        .then((stream) => setBarcodeStream(stream))
+        .catch((err) => {
+          toast.error(friendlyCameraError(err))
+          setBarcodeStream(null)
+        })
+        .finally(() => setOpeningCamera(false))
+    } else if (scan === 'batch') {
+      setAssist('batch')
+    } else if (scan === 'photo' || scan === 'ocr') {
+      setAssist('photo')
+      setOpeningCamera(true)
+      void openCameraStream()
+        .then((stream) => setCoverStream(stream))
+        .catch((err) => {
+          toast.error(friendlyCameraError(err))
+          setCoverStream(null)
+        })
+        .finally(() => setOpeningCamera(false))
+    }
+  }, [searchParams])
+
+  // Prefill from Shop mode (`/add?q=…`) — ISBN triggers form lookup; text runs a title search.
+  useEffect(() => {
+    const q = searchParams.get('q')?.trim()
+    if (!q) return
+
+    const isbn = toLookupIsbn(q)
+    if (isLookupIsbn(isbn) || isLookupIsbn(q)) {
+      setDraft((d) => ({
+        ...d,
+        isbn: isLookupIsbn(isbn) ? isbn : normalizeIsbn(q),
+        source: 'manual',
+      }))
+      return
+    }
+
+    setDraft((d) => ({ ...d, title: q, source: 'manual' }))
+    let cancelled = false
+    setSearching(true)
+    void searchBooks(q)
+      .then((found) => {
+        if (cancelled) return
+        setCandidates(found)
+        if (found.length > 0) {
+          toast.success(
+            `Found ${found.length} possible match${found.length === 1 ? '' : 'es'}`,
+          )
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCandidates([])
+      })
+      .finally(() => {
+        if (!cancelled) setSearching(false)
+      })
+    return () => {
+      cancelled = true
     }
   }, [searchParams])
 
@@ -117,6 +186,7 @@ export default function AddBookPage() {
     setOpeningCamera(false)
     setAssist('none')
     setCandidates(null)
+    setSearching(false)
   }
 
   const openBarcode = () => {
@@ -233,8 +303,9 @@ export default function AddBookPage() {
       isbn: result.isbn,
       language: result.language,
       cover_url: result.cover_url ?? captured?.previewUrl ?? null,
-      source: 'ocr',
+      source: captured ? 'ocr' : 'manual',
     }))
+    setCandidates(null)
     closeAssist()
   }
 
@@ -433,7 +504,7 @@ export default function AddBookPage() {
         </div>
       ) : (
         <div className="space-y-5">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <button
               type="button"
               onClick={openBarcode}
@@ -443,7 +514,22 @@ export default function AddBookPage() {
                 <ScanBarcode className="h-5 w-5" />
               </span>
               <span className="text-sm font-semibold">Scan barcode</span>
-              <span className="text-xs text-muted-foreground">Fastest way</span>
+              <span className="text-xs text-muted-foreground">
+                One ISBN at a time
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setAssist('batch')}
+              className="flex flex-col items-center gap-2 rounded-2xl border border-border bg-card p-5 text-center transition hover:border-primary/50 hover:bg-accent/40 active:scale-[0.98]"
+            >
+              <span className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/10 text-primary">
+                <Layers className="h-5 w-5" />
+              </span>
+              <span className="text-sm font-semibold">Batch scan</span>
+              <span className="text-xs text-muted-foreground">
+                Many barcodes in a row
+              </span>
             </button>
             <button
               type="button"
@@ -455,24 +541,66 @@ export default function AddBookPage() {
               </span>
               <span className="text-sm font-semibold">Snap the cover</span>
               <span className="text-xs text-muted-foreground">
-                No barcode? Use a photo
+                OCR when there’s no barcode
               </span>
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => setAssist('batch')}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-dashed border-border px-4 py-3 text-sm font-medium text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
-          >
-            <ScanBarcode className="h-4 w-4" />
-            Batch scan many barcodes
-          </button>
 
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="h-px flex-1 bg-border" />
             or enter the details below
             <span className="h-px flex-1 bg-border" />
           </div>
+
+          {searching ? (
+            <div className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+              <Spinner className="h-4 w-4" />
+              Searching for matches…
+            </div>
+          ) : candidates && candidates.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Is it one of these?</p>
+              <ul className="space-y-2">
+                {candidates.map((result, i) => (
+                  <li key={`${result.title}-${i}`}>
+                    <button
+                      type="button"
+                      onClick={() => pickCandidate(result)}
+                      className="flex w-full items-center gap-3 rounded-xl border border-border bg-card p-2.5 text-left transition hover:border-primary/50 hover:bg-accent/40"
+                    >
+                      <div className="w-10 shrink-0">
+                        <CoverImage
+                          url={result.cover_url}
+                          title={result.title}
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium">
+                          {result.title}
+                        </p>
+                        {result.author ? (
+                          <p className="truncate text-xs text-muted-foreground">
+                            {result.author}
+                          </p>
+                        ) : null}
+                      </div>
+                      <LanguageBadge
+                        code={result.language}
+                        showLabel={false}
+                      />
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => setCandidates(null)}
+              >
+                None of these — keep typing
+              </Button>
+            </div>
+          ) : null}
 
           <BookForm
             value={draft}

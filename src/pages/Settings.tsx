@@ -4,11 +4,13 @@ import { Link } from 'react-router-dom'
 import {
   Check,
   FolderOpen,
+  Keyboard,
   Link2,
   LogOut,
   MapPin,
   Monitor,
   Moon,
+  Sparkles,
   Sun,
   Tag,
   Bug,
@@ -119,9 +121,45 @@ export default function SettingsPage() {
   )
   const canImport = orphanCategories.length > 0 || orphanShelves.length > 0
 
+  const reopenTips = () => {
+    updateProfile.mutate(
+      { onboarding_completed: false },
+      {
+        onSuccess: () => toast.success('Tips will show again'),
+        onError: (e) => toast.error(e.message),
+      },
+    )
+  }
+
+  const TOC = [
+    { href: '#install', label: 'Download' },
+    { href: '#shelves', label: 'Shelves' },
+    { href: '#collections', label: 'Collections' },
+    { href: '#categories', label: 'Categories' },
+    { href: '#import-export', label: 'Import' },
+    { href: '#shortcuts', label: 'Shortcuts' },
+    { href: '#diagnostics', label: 'Diagnostics' },
+  ] as const
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+      <div className="space-y-3">
+        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <nav
+          aria-label="Settings sections"
+          className="flex gap-1.5 overflow-x-auto pb-0.5"
+        >
+          {TOC.map((item) => (
+            <a
+              key={item.href}
+              href={item.href}
+              className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
+      </div>
 
       <InstallAppCard />
 
@@ -299,6 +337,53 @@ export default function SettingsPage() {
         </CardHeader>
         <CardContent>
           <ImportExportPanel />
+        </CardContent>
+      </Card>
+
+      <Card id="shortcuts">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Keyboard className="h-4 w-4 text-muted-foreground" />
+            Keyboard shortcuts
+          </CardTitle>
+          <CardDescription>
+            Desktop shortcuts while you’re not typing in a field.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Focus library search</span>
+              <kbd className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs">
+                ⌘K
+              </kbd>
+            </li>
+            <li className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Add a book</span>
+              <kbd className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs">
+                ⌘N
+              </kbd>
+            </li>
+            <li className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Open shop mode</span>
+              <kbd className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs">
+                ⌘⇧S
+              </kbd>
+            </li>
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            On Windows / Linux, use Ctrl instead of ⌘.
+          </p>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={reopenTips}
+            disabled={updateProfile.isPending}
+          >
+            <Sparkles className="h-4 w-4" />
+            Show welcome tips again
+          </Button>
         </CardContent>
       </Card>
 

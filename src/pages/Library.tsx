@@ -49,7 +49,6 @@ import {
   READING_STATUS_META,
   type ReadingStatus,
 } from '@/lib/reading'
-import { OWNERSHIP_OPTIONS } from '@/lib/ownership'
 import type { Ownership } from '@/types'
 import { getLanguage, normalizeLanguageCode } from '@/lib/languages'
 import { normalizeIsbn, normalizeText } from '@/lib/duplicates'
@@ -269,7 +268,6 @@ export default function LibraryPage() {
             onClick={() =>
               selecting ? exitSelect() : setSelecting(true)
             }
-            className="hidden sm:inline-flex"
           >
             {selecting ? (
               <>
@@ -315,17 +313,26 @@ export default function LibraryPage() {
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg bg-muted p-1">
-            {SCOPES.map((option) => (
+        <div className="space-y-2">
+          <div className="flex gap-1 overflow-x-auto pb-0.5">
+            {(
+              [
+                { value: 'all' as const, label: 'All' },
+                { value: 'owned' as const, label: 'Owned' },
+                { value: 'wishlist' as const, label: 'Wishlist' },
+                { value: 'want_to_buy' as const, label: 'Want' },
+                { value: 'favorites' as const, label: 'Favorites' },
+              ] as const
+            ).map((option) => (
               <button
                 key={option.value}
-                onClick={() => setScope(option.value)}
+                type="button"
+                onClick={() => setOwnership(option.value)}
                 className={cn(
-                  'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                  scope === option.value
-                    ? 'bg-background text-foreground shadow-sm'
-                    : 'text-muted-foreground hover:text-foreground',
+                  'shrink-0 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors',
+                  ownership === option.value
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:text-foreground',
                 )}
               >
                 {option.label}
@@ -333,25 +340,24 @@ export default function LibraryPage() {
             ))}
           </div>
 
-          <Select
-            value={ownership}
-            onValueChange={(v) => setOwnership(v as OwnershipFilter)}
-          >
-            <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-              <SelectValue placeholder="List" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All lists</SelectItem>
-              <SelectItem value="favorites">Favorites</SelectItem>
-              {OWNERSHIP_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="inline-flex rounded-lg bg-muted p-1">
+              {SCOPES.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setScope(option.value)}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    scope === option.value
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  {option.label}
+                </button>
               ))}
-            </SelectContent>
-          </Select>
+            </div>
 
-          {statusesPresent.length > 0 ? (
             <Select
               value={status}
               onValueChange={(v) => setStatus(v as StatusFilter)}
@@ -361,93 +367,96 @@ export default function LibraryPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
-                {statusesPresent.map((value) => (
+                {(statusesPresent.length > 0
+                  ? statusesPresent
+                  : READING_STATUSES
+                ).map((value) => (
                   <SelectItem key={value} value={value}>
                     {READING_STATUS_META[value].label}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          ) : null}
 
-          {languagesPresent.length > 1 ? (
-            <Select value={language} onValueChange={setLanguage}>
+            {languagesPresent.length > 1 ? (
+              <Select value={language} onValueChange={setLanguage}>
+                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All languages</SelectItem>
+                  {languagesPresent.map((code) => {
+                    const lang = getLanguage(code)
+                    return (
+                      <SelectItem key={code} value={code}>
+                        {lang ? `${lang.flag} ${lang.name}` : code}
+                      </SelectItem>
+                    )
+                  })}
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            {categoriesPresent.length > 0 ? (
+              <Select value={category} onValueChange={setCategory}>
+                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                  <SelectValue placeholder="Category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All categories</SelectItem>
+                  {categoriesPresent.map((label) => (
+                    <SelectItem key={label.toLowerCase()} value={label}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            {collectionsPresent.length > 0 ? (
+              <Select value={collection} onValueChange={setCollection}>
+                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                  <SelectValue placeholder="Collection" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All collections</SelectItem>
+                  {collectionsPresent.map((label) => (
+                    <SelectItem key={label.toLowerCase()} value={label}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            {shelvesPresent.length > 0 ? (
+              <Select value={shelf} onValueChange={setShelf}>
+                <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
+                  <SelectValue placeholder="Shelf" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All shelves</SelectItem>
+                  {shelvesPresent.map((label) => (
+                    <SelectItem key={label.toLowerCase()} value={label}>
+                      {label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : null}
+
+            <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
               <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All languages</SelectItem>
-                {languagesPresent.map((code) => {
-                  const lang = getLanguage(code)
-                  return (
-                    <SelectItem key={code} value={code}>
-                      {lang ? `${lang.flag} ${lang.name}` : code}
-                    </SelectItem>
-                  )
-                })}
+                <SelectItem value="recent">Recently added</SelectItem>
+                <SelectItem value="title">Title A–Z</SelectItem>
+                <SelectItem value="author">Author A–Z</SelectItem>
+                <SelectItem value="rating">Highest rated</SelectItem>
               </SelectContent>
             </Select>
-          ) : null}
-
-          {categoriesPresent.length > 0 ? (
-            <Select value={category} onValueChange={setCategory}>
-              <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All categories</SelectItem>
-                {categoriesPresent.map((label) => (
-                  <SelectItem key={label.toLowerCase()} value={label}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-
-          {collectionsPresent.length > 0 ? (
-            <Select value={collection} onValueChange={setCollection}>
-              <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                <SelectValue placeholder="Collection" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All collections</SelectItem>
-                {collectionsPresent.map((label) => (
-                  <SelectItem key={label.toLowerCase()} value={label}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-
-          {shelvesPresent.length > 0 ? (
-            <Select value={shelf} onValueChange={setShelf}>
-              <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-                <SelectValue placeholder="Shelf" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All shelves</SelectItem>
-                {shelvesPresent.map((label) => (
-                  <SelectItem key={label.toLowerCase()} value={label}>
-                    {label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          ) : null}
-
-          <Select value={sort} onValueChange={(v) => setSort(v as Sort)}>
-            <SelectTrigger className="h-9 w-auto min-w-[7rem] text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="recent">Recently added</SelectItem>
-              <SelectItem value="title">Title A–Z</SelectItem>
-              <SelectItem value="author">Author A–Z</SelectItem>
-              <SelectItem value="rating">Highest rated</SelectItem>
-            </SelectContent>
-          </Select>
+          </div>
         </div>
       </div>
 

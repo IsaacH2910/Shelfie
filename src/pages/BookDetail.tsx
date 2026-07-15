@@ -10,6 +10,7 @@ import {
   Lock,
   MapPin,
   Pencil,
+  StickyNote,
   Tag,
   Trash2,
   Users,
@@ -24,13 +25,21 @@ import { BookForm } from '@/components/BookForm'
 import { BookCard } from '@/components/BookCard'
 import { BookAnnotations } from '@/components/BookAnnotations'
 import { BookLoans } from '@/components/BookLoans'
+import { ReadingStatusSelect } from '@/components/ReadingStatusSelect'
 import { FullScreenLoader } from '@/components/Spinner'
 import { EmptyState } from '@/components/EmptyState'
-import { formatProgress, normalizeReadingStatus } from '@/lib/reading'
+import {
+  formatProgress,
+  normalizeReadingStatus,
+  readingTimestampsForStatus,
+  type ReadingStatus,
+} from '@/lib/reading'
 import { OWNERSHIP_OPTIONS } from '@/lib/ownership'
+import { cn } from '@/lib/utils'
 import {
   useBooks,
   useDeleteBook,
+  usePatchBooks,
   useRestoreBooks,
   useTouchBookOpened,
   useUpdateBook,
@@ -78,11 +87,13 @@ export default function BookDetailPage() {
   const { data: books, isLoading } = useBooks()
   const { data: households } = useHouseholds()
   const updateBook = useUpdateBook()
+  const patchBooks = usePatchBooks()
   const deleteBook = useDeleteBook()
   const restoreBooks = useRestoreBooks()
   const touchOpened = useTouchBookOpened()
 
   const [editing, setEditing] = useState(false)
+  const [panel, setPanel] = useState<'details' | 'notes' | 'loans'>('details')
   const [draft, setDraft] = useState<BookDraft | null>(null)
   const [saving, setSaving] = useState(false)
   const [pendingCover, setPendingCover] = useState<{
@@ -214,6 +225,32 @@ export default function BookDetailPage() {
     }
   }
 
+  const toggleFavorite = () => {
+    const next = !book.is_favorite
+    void patchBooks
+      .mutateAsync({
+        ids: [book.id],
+        patch: { is_favorite: next },
+      })
+      .then(() => toast.success(next ? 'Added to favorites' : 'Removed from favorites'))
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : 'Could not update'),
+      )
+  }
+
+  const setReadingStatus = (status: ReadingStatus) => {
+    const stamps = readingTimestampsForStatus(status, book)
+    void patchBooks
+      .mutateAsync({
+        ids: [book.id],
+        patch: { reading_status: status, ...stamps },
+      })
+      .then(() => toast.success('Status updated'))
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : 'Could not update'),
+      )
+  }
+
   if (editing && draft) {
     return (
       <div className="mx-auto max-w-xl space-y-5">
@@ -250,13 +287,34 @@ export default function BookDetailPage() {
     )
   }
 
+  const PANELS = [
+    { id: 'details' as const, label: 'Details' },
+    { id: 'notes' as const, label: 'Notes' },
+    { id: 'loans' as const, label: 'Loans' },
+  ]
+
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <div className="flex items-center justify-between">
         <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={toggleFavorite}
+            disabled={patchBooks.isPending}
+            aria-pressed={!!book.is_favorite}
+          >
+            <Heart
+              className={cn(
+                'h-4 w-4',
+                book.is_favorite && 'fill-red-500 text-red-500',
+              )}
+            />
+            {book.is_favorite ? 'Favorited' : 'Favorite'}
+          </Button>
           <Button variant="outline" size="sm" onClick={startEdit}>
             <Pencil className="h-4 w-4" />
             Edit
@@ -326,6 +384,15 @@ export default function BookDetailPage() {
               </Badge>
             ))}
           </div>
+
+          <div className="max-w-xs">
+            <ReadingStatusSelect
+              value={normalizeReadingStatus(book.reading_status)}
+              onChange={setReadingStatus}
+              disabled={patchBooks.isPending}
+            />
+          </div>
+
           {book.series ? (
             <p className="text-sm text-muted-foreground">Series · {book.series}</p>
           ) : null}
@@ -344,8 +411,30 @@ export default function BookDetailPage() {
               {formatProgress(book.current_page, book.page_count)}
             </p>
           ) : null}
+        </div>
+      </div>
 
-          <dl className="space-y-2 pt-1 text-sm">
+      <div className="inline-flex rounded-lg bg-muted p-1">
+        {PANELS.map((option) => (
+          <button
+            key={option.id}
+            type="button"
+            onClick={() => setPanel(option.id)}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+              panel === option.id
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            {option.label}
+          </button>
+        ))}
+      </div>
+
+      {panel === 'details' ? (
+        <div className="space-y-4">
+          <dl className="space-y-2 rounded-xl border border-border bg-card p-4 text-sm">
             {book.shelf_location ? (
               <div className="flex items-center gap-2">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
@@ -419,43 +508,62 @@ export default function BookDetailPage() {
                 </Button>
               </div>
             ) : null}
+            {book.publisher || book.published_year ? (
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <BookText className="h-4 w-4" />
+                <dd>
+                  {[book.publisher, book.published_year].filter(Boolean).join(' · ')}
+                </dd>
+              </div>
+            ) : null}
           </dl>
-        </div>
-      </div>
 
-      {book.review ? (
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-semibold">Review</h2>
-          <p className="whitespace-pre-wrap text-sm text-foreground">
-            {book.review}
-          </p>
+          {book.review ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h2 className="mb-2 text-sm font-semibold">Review</h2>
+              <p className="whitespace-pre-wrap text-sm text-foreground">
+                {book.review}
+              </p>
+            </div>
+          ) : null}
+
+          {related.length > 0 ? (
+            <div className="space-y-3">
+              <h2 className="text-sm font-semibold text-muted-foreground">
+                Other editions you own ({related.length})
+              </h2>
+              <div className="grid grid-cols-3 gap-4 sm:grid-cols-4">
+                {related.map((other) => (
+                  <BookCard key={other.id} book={other} />
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {panel === 'notes' ? (
+        <div className="space-y-4">
+          {book.notes ? (
+            <div className="rounded-xl border border-border bg-card p-4">
+              <h2 className="mb-2 flex items-center gap-2 text-sm font-semibold">
+                <StickyNote className="h-4 w-4 text-muted-foreground" />
+                Book notes
+              </h2>
+              <p className="whitespace-pre-wrap text-sm text-foreground">
+                {book.notes}
+              </p>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              No book notes yet — add them in Edit.
+            </p>
+          )}
+          <BookAnnotations bookId={book.id} />
         </div>
       ) : null}
 
-      {book.notes ? (
-        <div className="rounded-xl border border-border bg-card p-4">
-          <h2 className="mb-2 text-sm font-semibold">Notes</h2>
-          <p className="whitespace-pre-wrap text-sm text-foreground">
-            {book.notes}
-          </p>
-        </div>
-      ) : null}
-
-      <BookAnnotations bookId={book.id} />
-      <BookLoans bookId={book.id} />
-
-      {related.length > 0 ? (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground">
-            Other editions you own ({related.length})
-          </h2>
-          <div className="grid grid-cols-3 gap-4 sm:grid-cols-4">
-            {related.map((other) => (
-              <BookCard key={other.id} book={other} />
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {panel === 'loans' ? <BookLoans bookId={book.id} /> : null}
     </div>
   )
 }
