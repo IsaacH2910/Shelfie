@@ -1,9 +1,11 @@
 import { test, expect } from '@playwright/test'
-import { mockBookApis, MOCK_ISBN } from './helpers'
+import { mockBookApis, MOCK_ISBN, dismissOnboarding } from './helpers'
 
 test.describe('Add book', () => {
   test.beforeEach(async ({ page }) => {
     await mockBookApis(page)
+    await page.goto('/')
+    await dismissOnboarding(page)
   })
 
   test('adds a book manually with ISBN lookup', async ({ page }) => {
@@ -14,7 +16,9 @@ test.describe('Add book', () => {
       timeout: 10000,
     })
     await page.getByRole('button', { name: /add to library/i }).click()
-    await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Library', exact: true }),
+    ).toBeVisible()
     await expect(page.getByText('Manual Test Book')).toBeVisible()
   })
 

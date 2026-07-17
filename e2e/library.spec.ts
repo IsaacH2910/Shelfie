@@ -1,14 +1,21 @@
 import { test, expect } from '@playwright/test'
+import { dismissOnboarding } from './helpers'
 
 test.describe('Home & Library', () => {
-  test('home dashboard greets the user', async ({ page }) => {
+  test.beforeEach(async ({ page }) => {
     await page.goto('/')
+    await dismissOnboarding(page)
+  })
+
+  test('home dashboard greets the user', async ({ page }) => {
     await expect(page.getByRole('heading').first()).toBeVisible()
   })
 
   test('library page has filter search', async ({ page }) => {
     await page.goto('/library')
-    await expect(page.getByRole('heading', { name: 'Library' })).toBeVisible()
+    await expect(
+      page.getByRole('heading', { name: 'Library', exact: true }),
+    ).toBeVisible()
     await expect(page.getByTestId('library-search')).toBeVisible()
   })
 
@@ -42,8 +49,32 @@ test.describe('Home & Library', () => {
   test('organize page has smart collections', async ({ page }) => {
     await page.goto('/organize')
     await expect(page.getByRole('heading', { name: 'Organize' })).toBeVisible()
+    await expect(page.getByText('Smart collections', { exact: true })).toBeVisible()
+  })
+
+  test('settings page loads profile and appearance', async ({ page }) => {
+    await page.goto('/settings')
+    await expect(page.getByRole('heading', { name: 'Settings' })).toBeVisible()
+    await expect(page.getByLabel('Display name')).toBeVisible()
+    await expect(page.locator('#appearance')).toBeVisible()
+  })
+
+  test('stats page loads', async ({ page }) => {
+    await page.goto('/stats')
+    await expect(page.getByRole('heading', { name: 'Stats' })).toBeVisible()
+  })
+
+  test('shelves page loads', async ({ page }) => {
+    await page.goto('/shelves')
     await expect(
-      page.getByRole('heading', { name: 'Smart collections' }),
+      page.getByRole('heading', { name: 'Shelves', exact: true }),
+    ).toBeVisible()
+  })
+
+  test('household page loads', async ({ page }) => {
+    await page.goto('/household')
+    await expect(
+      page.getByRole('heading', { name: /household/i }).first(),
     ).toBeVisible()
   })
 })

@@ -270,17 +270,25 @@ export function useTouchBookOpened() {
   return useMutation({
     mutationFn: async (id: string) => {
       const now = new Date().toISOString()
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from('books')
         .update({ last_opened_at: now })
         .eq('id', id)
+        .select('id, last_opened_at, updated_at')
+        .single()
       if (error) throw error
-      return { id, last_opened_at: now }
+      return data
     },
-    onSuccess: ({ id, last_opened_at }) => {
+    onSuccess: (updated) => {
       qc.setQueryData<BookWithCreator[]>(booksKey(user?.id), (prev) =>
         (prev ?? []).map((b) =>
-          b.id === id ? { ...b, last_opened_at } : b,
+          b.id === updated.id
+            ? {
+                ...b,
+                last_opened_at: updated.last_opened_at,
+                updated_at: updated.updated_at,
+              }
+            : b,
         ),
       )
     },
