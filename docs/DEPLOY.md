@@ -92,8 +92,9 @@ The anon key is safe in the frontend; Row Level Security keeps users’ books pr
 | `VITE_SUPABASE_URL` | Project URL from A3 |
 | `VITE_SUPABASE_ANON_KEY` | anon key from A3 |
 | `VITE_GOOGLE_BOOKS_API_KEY` | Optional — higher Google Books quota |
+| `ADMIN_EMAIL` | Your login email (e.g. `you@gmail.com`) — that signed-in user can open `/admin`. Set for **Production** and **Preview**. |
 
-Apply to **Production** (and Preview if you want). Vite bakes these in at build
+Apply to **Production** and **Preview**. Vite bakes `VITE_*` in at build
 time — **redeploy** after changing them.
 
 [`vercel.json`](../vercel.json) serves the SPA while leaving `/api/*` for the

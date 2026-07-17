@@ -9,7 +9,7 @@ setup('authenticate', async ({ page }) => {
   fs.mkdirSync(path.dirname(authFile), { recursive: true })
 
   await page.goto('/auth')
-  await page.getByRole('tab', { name: /create account/i }).click()
+  await page.getByRole('button', { name: /create an account/i }).click()
   await page.getByLabel('Email').fill(TEST_USER.email)
   await page.getByLabel('Password').fill(TEST_USER.password)
   await page.getByRole('button', { name: /^create account$/i }).click()

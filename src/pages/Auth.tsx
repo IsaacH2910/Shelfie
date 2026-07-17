@@ -9,7 +9,6 @@ import { Spinner } from '@/components/Spinner'
 import { useAuth } from '@/context/AuthProvider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { REDIRECT_KEY } from '@/lib/constants'
-import { cn } from '@/lib/utils'
 
 function GoogleIcon() {
   return (
@@ -68,50 +67,92 @@ export default function AuthPage() {
   }
 
   const handleMagicLink = async () => {
-    if (!email) return
+    if (!email.trim()) return
     setLoading('email')
     const { error } = await supabase.auth.signInWithOtp({
-      email,
+      email: email.trim(),
       options: { emailRedirectTo: redirectTo },
     })
     setLoading(null)
     if (error) {
       toast.error(error.message)
     } else {
-      setSentTo(email)
+      setSentTo(email.trim())
     }
   }
 
   const handlePassword = async () => {
-    if (!email || !password) return
+    const trimmed = email.trim()
+    if (!trimmed || !password) return
     setLoading('email')
-    const { error } =
-      mode === 'signUp'
-        ? await supabase.auth.signUp({
-            email,
-            password,
-            options: { emailRedirectTo: redirectTo },
-          })
-        : await supabase.auth.signInWithPassword({ email, password })
+
+    if (mode === 'signUp') {
+      const { data, error } = await supabase.auth.signUp({
+        email: trimmed,
+        password,
+        options: { emailRedirectTo: redirectTo },
+      })
+      setLoading(null)
+      if (error) {
+        toast.error(error.message)
+        return
+      }
+      // Confirmation required → no session yet
+      if (!data.session) {
+        setSentTo(trimmed)
+      }
+      return
+    }
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: trimmed,
+      password,
+    })
     setLoading(null)
     if (error) {
-      toast.error(error.message)
-    } else if (mode === 'signUp') {
-      setSentTo(email)
+      const hint =
+        /invalid login credentials/i.test(error.message)
+          ? ' No account yet? Create one first.'
+          : ''
+      toast.error(`${error.message}${hint}`)
     }
   }
 
+  const heading =
+    mode === 'signUp'
+      ? 'Create your account'
+      : mode === 'magic'
+        ? 'Email a sign-in link'
+        : 'Sign in to Shelfie'
+
+  const sub =
+    mode === 'signUp'
+      ? 'Use a real email — you can link Google later in Settings.'
+      : mode === 'magic'
+        ? 'We’ll send a one-tap link to your inbox.'
+        : 'Your library syncs across every device.'
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-10">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center text-center">
-          <span className="mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-md">
-            <BookMarked className="h-7 w-7" />
+    <div className="relative flex min-h-screen flex-col items-center justify-center overflow-hidden px-4 py-12">
+      <div
+        className="pointer-events-none absolute inset-0 -z-10"
+        aria-hidden
+        style={{
+          background:
+            'radial-gradient(ellipse 80% 60% at 50% -10%, hsl(var(--primary) / 0.18), transparent 55%), radial-gradient(ellipse 50% 40% at 100% 100%, hsl(var(--primary) / 0.08), transparent 50%), hsl(var(--background))',
+        }}
+      />
+
+      <div className="w-full max-w-[400px]">
+        <div className="mb-10 flex flex-col items-center text-center">
+          <span className="mb-4 flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-primary-foreground shadow-lg shadow-primary/25">
+            <BookMarked className="h-6 w-6" />
           </span>
-          <h1 className="text-2xl font-bold tracking-tight">Shelfie</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Your book collection, on every device.
-          </p>
+          <p className="text-2xl font-bold tracking-tight">Shelfie</p>
+          <h1 className="mt-6 text-xl font-semibold tracking-tight text-foreground">
+            {heading}
+          </h1>
+          <p className="mt-1.5 max-w-xs text-sm text-muted-foreground">{sub}</p>
         </div>
 
         {!isSupabaseConfigured ? (
@@ -120,23 +161,22 @@ export default function AuthPage() {
               Connect Supabase to sign in
             </p>
             <p className="mt-1 text-muted-foreground">
-              Add your project URL and anon key to a{' '}
-              <code className="rounded bg-muted px-1">.env.local</code> file, then
-              restart the dev server. See{' '}
-              <code className="rounded bg-muted px-1">README.md</code>.
+              Add your project URL and anon key to{' '}
+              <code className="rounded bg-muted px-1">.env.local</code>, then
+              restart the dev server.
             </p>
           </div>
         ) : null}
 
         {sentTo ? (
-          <div className="animate-fade-in rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+          <div className="animate-fade-in rounded-2xl border border-border/80 bg-card/80 p-8 text-center shadow-sm backdrop-blur-sm">
             <span className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-accent text-accent-foreground">
               <Mail className="h-6 w-6" />
             </span>
             <h2 className="text-lg font-semibold">Check your inbox</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              We sent a link to <span className="font-medium">{sentTo}</span>.
-              Open it on this device to finish signing in.
+              We sent a link to <span className="font-medium text-foreground">{sentTo}</span>.
+              Open it on this device to finish.
             </p>
             <Button
               variant="ghost"
@@ -147,59 +187,25 @@ export default function AuthPage() {
             </Button>
           </div>
         ) : (
-          <div className="rounded-2xl border border-border bg-card p-6 shadow-sm">
-            <div className="grid gap-2.5">
-              <Button
-                variant="outline"
-                onClick={() => void handleOAuth()}
-                disabled={loading !== null}
-              >
-                <GoogleIcon />
-                Continue with Google
-              </Button>
-            </div>
-
-            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="h-px flex-1 bg-border" />
-              or with email
-              <span className="h-px flex-1 bg-border" />
-            </div>
-
+          <div className="rounded-2xl border border-border/80 bg-card/80 p-6 shadow-sm backdrop-blur-sm sm:p-8">
             {mode !== 'magic' ? (
-              <div
-                className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
-                role="tablist"
-                aria-label="Account mode"
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === 'signIn'}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    mode === 'signIn'
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                  onClick={() => setMode('signIn')}
+              <>
+                <Button
+                  variant="outline"
+                  className="h-11 w-full"
+                  onClick={() => void handleOAuth()}
+                  disabled={loading !== null}
                 >
-                  Sign in
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mode === 'signUp'}
-                  className={cn(
-                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
-                    mode === 'signUp'
-                      ? 'bg-background text-foreground shadow-sm'
-                      : 'text-muted-foreground hover:text-foreground',
-                  )}
-                  onClick={() => setMode('signUp')}
-                >
-                  Create account
-                </button>
-              </div>
+                  <GoogleIcon />
+                  Continue with Google
+                </Button>
+
+                <div className="my-6 flex items-center gap-3 text-xs text-muted-foreground">
+                  <span className="h-px flex-1 bg-border" />
+                  or
+                  <span className="h-px flex-1 bg-border" />
+                </div>
+              </>
             ) : null}
 
             <form
@@ -208,7 +214,7 @@ export default function AuthPage() {
                 if (mode === 'magic') void handleMagicLink()
                 else void handlePassword()
               }}
-              className="space-y-3"
+              className="space-y-4"
             >
               <div className="space-y-1.5">
                 <Label htmlFor="email">Email</Label>
@@ -217,8 +223,10 @@ export default function AuthPage() {
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="you@example.com"
+                  placeholder="you@gmail.com"
                   autoComplete="email"
+                  inputMode="email"
+                  className="h-11"
                   required
                 />
               </div>
@@ -231,17 +239,22 @@ export default function AuthPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder="At least 6 characters"
                     autoComplete={
                       mode === 'signUp' ? 'new-password' : 'current-password'
                     }
                     minLength={6}
+                    className="h-11"
                     required
                   />
                 </div>
               ) : null}
 
-              <Button type="submit" className="w-full" disabled={loading !== null}>
+              <Button
+                type="submit"
+                className="h-11 w-full"
+                disabled={loading !== null}
+              >
                 {loading === 'email' ? (
                   <Spinner className="h-4 w-4" />
                 ) : mode === 'magic' ? (
@@ -254,18 +267,51 @@ export default function AuthPage() {
               </Button>
             </form>
 
-            <div className="mt-4 text-center text-sm">
-              <button
-                type="button"
-                className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                onClick={() =>
-                  setMode((m) => (m === 'magic' ? 'signIn' : 'magic'))
-                }
-              >
-                {mode === 'magic'
-                  ? 'Use email and password instead'
-                  : 'Email me a magic link instead'}
-              </button>
+            <div className="mt-6 space-y-2 text-center text-sm">
+              {mode === 'magic' ? (
+                <button
+                  type="button"
+                  className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                  onClick={() => setMode('signIn')}
+                >
+                  Back to password sign in
+                </button>
+              ) : (
+                <>
+                  <p className="text-muted-foreground">
+                    {mode === 'signIn' ? (
+                      <>
+                        New here?{' '}
+                        <button
+                          type="button"
+                          className="font-medium text-foreground underline-offset-2 hover:underline"
+                          onClick={() => setMode('signUp')}
+                        >
+                          Create an account
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        Already have an account?{' '}
+                        <button
+                          type="button"
+                          className="font-medium text-foreground underline-offset-2 hover:underline"
+                          onClick={() => setMode('signIn')}
+                        >
+                          Sign in
+                        </button>
+                      </>
+                    )}
+                  </p>
+                  <button
+                    type="button"
+                    className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+                    onClick={() => setMode('magic')}
+                  >
+                    Email me a magic link instead
+                  </button>
+                </>
+              )}
             </div>
           </div>
         )}
