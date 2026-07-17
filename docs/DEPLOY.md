@@ -76,6 +76,8 @@ The anon key is safe in the frontend; Row Level Security keeps users’ books pr
      http://localhost:5173
      ```
 3. Optionally enable Google / Apple OAuth and add the same redirect URLs there.
+4. To let users link Gmail to an email/password account: **Authentication →
+   Providers → Email** (or Auth settings) → enable **Manual linking**.
 
 ### A5 — Import the repo into Vercel
 

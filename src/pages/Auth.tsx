@@ -9,6 +9,7 @@ import { Spinner } from '@/components/Spinner'
 import { useAuth } from '@/context/AuthProvider'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { REDIRECT_KEY } from '@/lib/constants'
+import { cn } from '@/lib/utils'
 
 function GoogleIcon() {
   return (
@@ -33,16 +34,15 @@ function GoogleIcon() {
   )
 }
 
+type Mode = 'signIn' | 'signUp' | 'magic'
+
 export default function AuthPage() {
   const { session } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [usePassword, setUsePassword] = useState(false)
-  const [signUp, setSignUp] = useState(false)
-  const [loading, setLoading] = useState<null | 'magic' | 'password' | 'oauth'>(
-    null,
-  )
+  const [mode, setMode] = useState<Mode>('signIn')
+  const [loading, setLoading] = useState<null | 'email' | 'oauth'>(null)
   const [sentTo, setSentTo] = useState<string | null>(null)
 
   useEffect(() => {
@@ -55,10 +55,10 @@ export default function AuthPage() {
 
   const redirectTo = window.location.origin
 
-  const handleOAuth = async (provider: 'google') => {
+  const handleOAuth = async () => {
     setLoading('oauth')
     const { error } = await supabase.auth.signInWithOAuth({
-      provider,
+      provider: 'google',
       options: { redirectTo },
     })
     if (error) {
@@ -69,7 +69,7 @@ export default function AuthPage() {
 
   const handleMagicLink = async () => {
     if (!email) return
-    setLoading('magic')
+    setLoading('email')
     const { error } = await supabase.auth.signInWithOtp({
       email,
       options: { emailRedirectTo: redirectTo },
@@ -84,18 +84,19 @@ export default function AuthPage() {
 
   const handlePassword = async () => {
     if (!email || !password) return
-    setLoading('password')
-    const { error } = signUp
-      ? await supabase.auth.signUp({
-          email,
-          password,
-          options: { emailRedirectTo: redirectTo },
-        })
-      : await supabase.auth.signInWithPassword({ email, password })
+    setLoading('email')
+    const { error } =
+      mode === 'signUp'
+        ? await supabase.auth.signUp({
+            email,
+            password,
+            options: { emailRedirectTo: redirectTo },
+          })
+        : await supabase.auth.signInWithPassword({ email, password })
     setLoading(null)
     if (error) {
       toast.error(error.message)
-    } else if (signUp) {
+    } else if (mode === 'signUp') {
       setSentTo(email)
     }
   }
@@ -150,7 +151,7 @@ export default function AuthPage() {
             <div className="grid gap-2.5">
               <Button
                 variant="outline"
-                onClick={() => handleOAuth('google')}
+                onClick={() => void handleOAuth()}
                 disabled={loading !== null}
               >
                 <GoogleIcon />
@@ -164,11 +165,48 @@ export default function AuthPage() {
               <span className="h-px flex-1 bg-border" />
             </div>
 
+            {mode !== 'magic' ? (
+              <div
+                className="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-muted p-1"
+                role="tablist"
+                aria-label="Account mode"
+              >
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'signIn'}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    mode === 'signIn'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => setMode('signIn')}
+                >
+                  Sign in
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={mode === 'signUp'}
+                  className={cn(
+                    'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                    mode === 'signUp'
+                      ? 'bg-background text-foreground shadow-sm'
+                      : 'text-muted-foreground hover:text-foreground',
+                  )}
+                  onClick={() => setMode('signUp')}
+                >
+                  Create account
+                </button>
+              </div>
+            ) : null}
+
             <form
               onSubmit={(e) => {
                 e.preventDefault()
-                if (usePassword) void handlePassword()
-                else void handleMagicLink()
+                if (mode === 'magic') void handleMagicLink()
+                else void handlePassword()
               }}
               className="space-y-3"
             >
@@ -185,7 +223,7 @@ export default function AuthPage() {
                 />
               </div>
 
-              {usePassword ? (
+              {mode !== 'magic' ? (
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Password</Label>
                   <Input
@@ -194,7 +232,9 @@ export default function AuthPage() {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    autoComplete={signUp ? 'new-password' : 'current-password'}
+                    autoComplete={
+                      mode === 'signUp' ? 'new-password' : 'current-password'
+                    }
                     minLength={6}
                     required
                   />
@@ -202,41 +242,30 @@ export default function AuthPage() {
               ) : null}
 
               <Button type="submit" className="w-full" disabled={loading !== null}>
-                {loading === 'magic' || loading === 'password' ? (
+                {loading === 'email' ? (
                   <Spinner className="h-4 w-4" />
-                ) : usePassword ? (
-                  signUp ? (
-                    'Create account'
-                  ) : (
-                    'Sign in'
-                  )
-                ) : (
+                ) : mode === 'magic' ? (
                   'Send magic link'
+                ) : mode === 'signUp' ? (
+                  'Create account'
+                ) : (
+                  'Sign in'
                 )}
               </Button>
             </form>
 
-            <div className="mt-4 space-y-1 text-center text-sm">
+            <div className="mt-4 text-center text-sm">
               <button
                 type="button"
                 className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                onClick={() => setUsePassword((v) => !v)}
+                onClick={() =>
+                  setMode((m) => (m === 'magic' ? 'signIn' : 'magic'))
+                }
               >
-                {usePassword ? 'Email me a magic link instead' : 'Use a password instead'}
+                {mode === 'magic'
+                  ? 'Use email and password instead'
+                  : 'Email me a magic link instead'}
               </button>
-              {usePassword ? (
-                <div>
-                  <button
-                    type="button"
-                    className="text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-                    onClick={() => setSignUp((v) => !v)}
-                  >
-                    {signUp
-                      ? 'Already have an account? Sign in'
-                      : "New here? Create an account"}
-                  </button>
-                </div>
-              ) : null}
             </div>
           </div>
         )}

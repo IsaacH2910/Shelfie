@@ -1,7 +1,6 @@
 /**
  * Client-side admin session helpers.
- * Token is issued by /api/admin-unlock after server password check.
- * Client only checks expiry/shape for UX; password never lives in the bundle.
+ * Unlock uses the signed-in Supabase session — no separate password field.
  */
 
 const STORAGE_KEY = 'shelfie_admin_token'
@@ -31,7 +30,9 @@ export function clearAdminToken() {
 }
 
 /** Lightweight client check: token has exp.nonce.sig and is not expired. */
-export function isAdminSessionValid(token: string | null = getAdminToken()): boolean {
+export function isAdminSessionValid(
+  token: string | null = getAdminToken(),
+): boolean {
   if (!token) return false
   const parts = token.split('.')
   if (parts.length !== 3) return false
@@ -43,19 +44,23 @@ export function isAdminSessionValid(token: string | null = getAdminToken()): boo
   return parts[1].length > 0 && parts[2].length > 0
 }
 
-export async function unlockAdmin(password: string): Promise<{
-  ok: boolean
-  error?: string
-}> {
+/** Ask the server whether this Supabase session is the configured admin email. */
+export async function unlockAdminWithSession(
+  accessToken: string,
+): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch('/api/admin-unlock', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password }),
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ accessToken }),
     })
     const data = (await res.json()) as { token?: string; error?: string }
     if (!res.ok || !data.token) {
-      return { ok: false, error: data.error ?? 'Unlock failed' }
+      clearAdminToken()
+      return { ok: false, error: data.error ?? 'Not authorized' }
     }
     setAdminToken(data.token)
     return { ok: true }

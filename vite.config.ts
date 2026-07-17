@@ -22,12 +22,12 @@ function shelfieDevApi(): Plugin {
             const mod = (await import(
               `${pathToFileURL(apiPath).href}?t=${Date.now()}`
             )) as {
-              unlockWithPassword: (password: string) => {
+              unlockWithAccessToken: (accessToken: string) => Promise<{
                 ok: boolean
                 token?: string
                 expiresAt?: number
                 error?: string
-              }
+              }>
             }
             let body = ''
             await new Promise<void>((resolve) => {
@@ -36,13 +36,24 @@ function shelfieDevApi(): Plugin {
               })
               req.on('end', () => resolve())
             })
-            let password = ''
+            let accessToken = ''
             try {
-              password = String(JSON.parse(body || '{}').password ?? '')
+              const parsed = JSON.parse(body || '{}') as {
+                accessToken?: string
+              }
+              accessToken = String(parsed.accessToken ?? '')
             } catch {
-              password = ''
+              accessToken = ''
             }
-            const result = mod.unlockWithPassword(password)
+            const auth = req.headers.authorization
+            if (
+              !accessToken &&
+              typeof auth === 'string' &&
+              auth.startsWith('Bearer ')
+            ) {
+              accessToken = auth.slice(7)
+            }
+            const result = await mod.unlockWithAccessToken(accessToken)
             res.setHeader('Content-Type', 'application/json')
             if (!result.ok) {
               res.statusCode = result.error?.includes('not configured')

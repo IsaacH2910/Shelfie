@@ -5,14 +5,11 @@ import {
   ArrowLeft,
   Bug,
   Download,
-  Lock,
   RefreshCw,
   Sparkles,
   Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
@@ -21,118 +18,91 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { CrashLogPanel } from '@/components/CrashLogPanel'
+import { FullScreenLoader } from '@/components/Spinner'
+import { useAuth } from '@/context/AuthProvider'
 import { useUpdateProfile } from '@/hooks/useProfile'
 import { queryClient } from '@/lib/queryClient'
 import {
   clearAdminToken,
   isAdminSessionValid,
-  unlockAdmin,
+  unlockAdminWithSession,
 } from '@/lib/adminSession'
 
 export default function AdminPage() {
-  const [unlocked, setUnlocked] = useState(() => isAdminSessionValid())
-  const [password, setPassword] = useState('')
-  const [busy, setBusy] = useState(false)
+  const { session } = useAuth()
+  const [status, setStatus] = useState<'checking' | 'ok' | 'denied'>(() =>
+    isAdminSessionValid() ? 'ok' : 'checking',
+  )
   const [error, setError] = useState('')
   const updateProfile = useUpdateProfile()
 
   useEffect(() => {
-    setUnlocked(isAdminSessionValid())
-  }, [])
-
-  const onUnlock = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setBusy(true)
-    setError('')
-    const result = await unlockAdmin(password)
-    setBusy(false)
-    if (result.ok) {
-      setPassword('')
-      setUnlocked(true)
-      toast.success('Admin unlocked')
-    } else {
-      setError(result.error ?? 'Unlock failed')
+    let cancelled = false
+    const run = async () => {
+      if (isAdminSessionValid()) {
+        if (!cancelled) setStatus('ok')
+        return
+      }
+      const token = session?.access_token
+      if (!token) {
+        if (!cancelled) {
+          setStatus('denied')
+          setError('Sign in first.')
+        }
+        return
+      }
+      if (!cancelled) setStatus('checking')
+      const result = await unlockAdminWithSession(token)
+      if (cancelled) return
+      if (result.ok) {
+        setStatus('ok')
+        setError('')
+      } else {
+        clearAdminToken()
+        setStatus('denied')
+        setError(result.error ?? 'Not authorized')
+      }
     }
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [session?.access_token])
+
+  if (status === 'checking') {
+    return <FullScreenLoader label="Checking access…" />
   }
 
-  const lock = () => {
-    clearAdminToken()
-    setUnlocked(false)
-    toast.message('Admin locked')
-  }
-
-  if (!unlocked) {
+  if (status !== 'ok') {
     return (
-      <div className="mx-auto max-w-sm space-y-6 animate-in">
-        <div>
-          <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
-            <Link to="/settings">
-              <ArrowLeft className="h-4 w-4" />
-              Back
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Enter the administrator password to continue.
-          </p>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-base">
-              <Lock className="h-4 w-4 text-muted-foreground" />
-              Unlock
-            </CardTitle>
-            <CardDescription>
-              Diagnostics and support tools for this deployment.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={(e) => void onUnlock(e)} className="space-y-3">
-              <div className="space-y-1.5">
-                <Label htmlFor="admin-password">Password</Label>
-                <Input
-                  id="admin-password"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  disabled={busy}
-                />
-              </div>
-              {error ? (
-                <p className="text-sm text-destructive" role="alert">
-                  {error}
-                </p>
-              ) : null}
-              <Button type="submit" className="w-full" disabled={busy || !password}>
-                {busy ? 'Checking…' : 'Unlock'}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      <div className="mx-auto max-w-sm space-y-4 animate-in">
+        <Button asChild variant="ghost" size="sm" className="-ml-2">
+          <Link to="/">
+            <ArrowLeft className="h-4 w-4" />
+            Back
+          </Link>
+        </Button>
+        <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
+        <p className="text-sm text-muted-foreground" role="alert">
+          {error || 'Not authorized.'}
+        </p>
       </div>
     )
   }
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 animate-in">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
-            <Link to="/settings">
-              <ArrowLeft className="h-4 w-4" />
-              Settings
-            </Link>
-          </Button>
-          <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Support tools — not shown to normal users.
-          </p>
-        </div>
-        <Button type="button" variant="outline" size="sm" onClick={lock}>
-          <Lock className="h-4 w-4" />
-          Lock
+      <div>
+        <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
+          <Link to="/settings">
+            <ArrowLeft className="h-4 w-4" />
+            Settings
+          </Link>
         </Button>
+        <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Support tools for this installation.
+        </p>
       </div>
 
       <Card>

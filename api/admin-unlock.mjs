@@ -1,26 +1,41 @@
 /**
- * Admin unlock — server-only password gate.
- * Env: ADMIN_PASSWORD (required), ADMIN_SESSION_SECRET (optional, falls back to password).
- * Never expose these as VITE_* — they must not ship in the client bundle.
+ * Admin unlock — allow only the signed-in email listed in ADMIN_EMAIL.
+ * Client sends Supabase access_token; no password UI.
+ * Never expose ADMIN_EMAIL as the only check without verifying the JWT.
  */
 
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto'
 
 const TTL_MS = 1000 * 60 * 60 * 8 // 8 hours
 
-function getPassword() {
-  return process.env.ADMIN_PASSWORD ?? ''
+function getAdminEmail() {
+  return String(process.env.ADMIN_EMAIL ?? '')
+    .trim()
+    .toLowerCase()
 }
 
 function getSecret() {
-  return process.env.ADMIN_SESSION_SECRET || getPassword() || 'shelfie-dev-insecure'
+  return (
+    process.env.ADMIN_SESSION_SECRET ||
+    process.env.ADMIN_EMAIL ||
+    'shelfie-dev-insecure'
+  )
+}
+
+function getSupabaseUrl() {
+  return process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
+}
+
+function getSupabaseAnonKey() {
+  return (
+    process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
+  )
 }
 
 function safeEqual(a, b) {
   const bufA = Buffer.from(String(a))
   const bufB = Buffer.from(String(b))
   if (bufA.length !== bufB.length) {
-    // Still run a compare to reduce timing leaks on length
     timingSafeEqual(bufA, Buffer.alloc(bufA.length))
     return false
   }
@@ -35,7 +50,6 @@ export function createAdminToken() {
   return `${payload}.${sig}`
 }
 
-/** Validate token shape + signature + expiry (usable from client copy of logic is separate). */
 export function verifyAdminToken(token) {
   if (!token || typeof token !== 'string') return false
   const parts = token.split('.')
@@ -45,7 +59,9 @@ export function verifyAdminToken(token) {
   if (!Number.isFinite(exp) || exp < Date.now()) return false
   if (!nonce || !sig) return false
   const payload = `${expStr}.${nonce}`
-  const expected = createHmac('sha256', getSecret()).update(payload).digest('hex')
+  const expected = createHmac('sha256', getSecret())
+    .update(payload)
+    .digest('hex')
   try {
     return safeEqual(sig, expected)
   } catch {
@@ -53,15 +69,43 @@ export function verifyAdminToken(token) {
   }
 }
 
-export function unlockWithPassword(password) {
-  const expected = getPassword()
-  if (!expected) {
+async function emailFromAccessToken(accessToken) {
+  const url = getSupabaseUrl()
+  const anon = getSupabaseAnonKey()
+  if (!url || !anon || !accessToken) return null
+  const res = await fetch(`${url.replace(/\/$/, '')}/auth/v1/user`, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      apikey: anon,
+    },
+  })
+  if (!res.ok) return null
+  const data = await res.json()
+  return typeof data?.email === 'string' ? data.email.trim().toLowerCase() : null
+}
+
+export async function unlockWithAccessToken(accessToken) {
+  const adminEmail = getAdminEmail()
+  if (!adminEmail) {
     return { ok: false, error: 'Admin is not configured on this server.' }
   }
-  if (!safeEqual(password ?? '', expected)) {
-    return { ok: false, error: 'Incorrect password.' }
+  const email = await emailFromAccessToken(accessToken)
+  if (!email) {
+    return { ok: false, error: 'Could not verify your session.' }
   }
-  return { ok: true, token: createAdminToken(), expiresAt: Date.now() + TTL_MS }
+  if (email !== adminEmail) {
+    return { ok: false, error: 'Not authorized.' }
+  }
+  return {
+    ok: true,
+    token: createAdminToken(),
+    expiresAt: Date.now() + TTL_MS,
+  }
+}
+
+/** @deprecated password unlock removed — kept for typing in vite middleware */
+export async function unlockWithPassword() {
+  return { ok: false, error: 'Use session unlock.' }
 }
 
 export default async function handler(req, res) {
@@ -82,12 +126,18 @@ export default async function handler(req, res) {
   }
   if (!body || typeof body !== 'object') body = {}
 
-  // Support Node request streams on some runtimes
-  if (!body.password && req.method === 'POST' && !req.body) {
+  if (!body.accessToken && req.method === 'POST' && !req.body) {
     body = await readJson(req)
   }
 
-  const result = unlockWithPassword(body.password)
+  const authHeader = req.headers?.authorization || req.headers?.Authorization
+  const bearer =
+    typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
+      ? authHeader.slice(7)
+      : ''
+  const accessToken = body.accessToken || bearer
+
+  const result = await unlockWithAccessToken(accessToken)
   if (!result.ok) {
     res.statusCode = result.error?.includes('not configured') ? 503 : 401
     res.end(JSON.stringify({ error: result.error }))
