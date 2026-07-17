@@ -1,6 +1,6 @@
 /**
  * Client-side admin session helpers.
- * Unlock uses the signed-in Supabase session — no separate password field.
+ * Unlock uses username `admin` + server ADMIN_PASSWORD — never a client secret.
  */
 
 const STORAGE_KEY = 'shelfie_admin_token'
@@ -44,18 +44,16 @@ export function isAdminSessionValid(
   return parts[1].length > 0 && parts[2].length > 0
 }
 
-/** Ask the server whether this Supabase session is the configured admin email. */
-export async function unlockAdminWithSession(
-  accessToken: string,
+/** Unlock admin tools with account `admin` + ADMIN_PASSWORD (verified server-side). */
+export async function unlockAdminWithPassword(
+  username: string,
+  password: string,
 ): Promise<{ ok: boolean; error?: string }> {
   try {
     const res = await fetch('/api/admin-unlock', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`,
-      },
-      body: JSON.stringify({ accessToken }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
     })
     const data = (await res.json()) as { token?: string; error?: string }
     if (!res.ok || !data.token) {

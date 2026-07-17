@@ -1,34 +1,22 @@
 /**
- * Admin unlock — allow only the signed-in email listed in ADMIN_EMAIL.
- * Client sends Supabase access_token; no password UI.
- * Never expose ADMIN_EMAIL as the only check without verifying the JWT.
+ * Admin unlock — username `admin` + ADMIN_PASSWORD (server env only).
+ * Never expose ADMIN_PASSWORD as VITE_* — it must not ship in the client bundle.
  */
 
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto'
 
 const TTL_MS = 1000 * 60 * 60 * 8 // 8 hours
+const ADMIN_USERNAME = 'admin'
 
-function getAdminEmail() {
-  return String(process.env.ADMIN_EMAIL ?? '')
-    .trim()
-    .toLowerCase()
+function getPassword() {
+  return process.env.ADMIN_PASSWORD ?? ''
 }
 
 function getSecret() {
   return (
     process.env.ADMIN_SESSION_SECRET ||
-    process.env.ADMIN_EMAIL ||
+    process.env.ADMIN_PASSWORD ||
     'shelfie-dev-insecure'
-  )
-}
-
-function getSupabaseUrl() {
-  return process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || ''
-}
-
-function getSupabaseAnonKey() {
-  return (
-    process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY || ''
   )
 }
 
@@ -69,43 +57,30 @@ export function verifyAdminToken(token) {
   }
 }
 
-async function emailFromAccessToken(accessToken) {
-  const url = getSupabaseUrl()
-  const anon = getSupabaseAnonKey()
-  if (!url || !anon || !accessToken) return null
-  const res = await fetch(`${url.replace(/\/$/, '')}/auth/v1/user`, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      apikey: anon,
-    },
-  })
-  if (!res.ok) return null
-  const data = await res.json()
-  return typeof data?.email === 'string' ? data.email.trim().toLowerCase() : null
-}
-
-export async function unlockWithAccessToken(accessToken) {
-  const adminEmail = getAdminEmail()
-  if (!adminEmail) {
+/**
+ * Unlock with account name `admin` and ADMIN_PASSWORD from env.
+ * @param {string} username
+ * @param {string} password
+ */
+export function unlockWithPassword(username, password) {
+  const expected = getPassword()
+  if (!expected) {
     return { ok: false, error: 'Admin is not configured on this server.' }
   }
-  const email = await emailFromAccessToken(accessToken)
-  if (!email) {
-    return { ok: false, error: 'Could not verify your session.' }
+  const user = String(username ?? '')
+    .trim()
+    .toLowerCase()
+  if (user !== ADMIN_USERNAME) {
+    return { ok: false, error: 'Invalid account or password.' }
   }
-  if (email !== adminEmail) {
-    return { ok: false, error: 'Not authorized.' }
+  if (!safeEqual(password ?? '', expected)) {
+    return { ok: false, error: 'Invalid account or password.' }
   }
   return {
     ok: true,
     token: createAdminToken(),
     expiresAt: Date.now() + TTL_MS,
   }
-}
-
-/** @deprecated password unlock removed — kept for typing in vite middleware */
-export async function unlockWithPassword() {
-  return { ok: false, error: 'Use session unlock.' }
 }
 
 export default async function handler(req, res) {
@@ -126,18 +101,16 @@ export default async function handler(req, res) {
   }
   if (!body || typeof body !== 'object') body = {}
 
-  if (!body.accessToken && req.method === 'POST' && !req.body) {
+  if (
+    body.username === undefined &&
+    body.password === undefined &&
+    req.method === 'POST' &&
+    !req.body
+  ) {
     body = await readJson(req)
   }
 
-  const authHeader = req.headers?.authorization || req.headers?.Authorization
-  const bearer =
-    typeof authHeader === 'string' && authHeader.startsWith('Bearer ')
-      ? authHeader.slice(7)
-      : ''
-  const accessToken = body.accessToken || bearer
-
-  const result = await unlockWithAccessToken(accessToken)
+  const result = unlockWithPassword(body.username, body.password)
   if (!result.ok) {
     res.statusCode = result.error?.includes('not configured') ? 503 : 401
     res.end(JSON.stringify({ error: result.error }))
