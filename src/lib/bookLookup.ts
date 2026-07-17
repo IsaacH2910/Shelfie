@@ -225,16 +225,22 @@ function isbnCandidates(rawIsbn: string): string[] {
   return out
 }
 
+/** Public origin for packaged desktop builds (no Vite /api proxy). */
+function bookLookupUrl(isbn: string): string {
+  const base = (
+    import.meta.env.VITE_PUBLIC_APP_URL as string | undefined
+  )?.replace(/\/$/, '')
+  const path = `/api/book-lookup?isbn=${encodeURIComponent(isbn)}`
+  return base ? `${base}${path}` : path
+}
+
 /** Server route covers Chinese/Japanese editions Google/OL often miss. */
 async function lookupViaServer(
   isbn: string,
   signal?: AbortSignal,
 ): Promise<LookupResult | null> {
   try {
-    const res = await fetch(
-      `/api/book-lookup?isbn=${encodeURIComponent(isbn)}`,
-      { signal },
-    )
+    const res = await fetch(bookLookupUrl(isbn), { signal })
     if (res.status === 422) {
       const data = (await res.json()) as { message?: string }
       throw new Error(

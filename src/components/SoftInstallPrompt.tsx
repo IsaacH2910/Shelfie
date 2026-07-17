@@ -4,7 +4,7 @@ import { Download, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useBooks } from '@/hooks/useBooks'
 import { usePwaInstall } from '@/hooks/usePwaInstall'
-import { isStandaloneDisplay } from '@/lib/platform'
+import { isStandaloneDisplay, isTauri } from '@/lib/platform'
 
 const DISMISS_KEY = 'shelfie_install_dismissed_until'
 const SEEN_KEY = 'shelfie_install_seen_count'
@@ -39,7 +39,7 @@ export function SoftInstallPrompt() {
   const [visible, setVisible] = useState(false)
 
   useEffect(() => {
-    if (install.installed || isStandaloneDisplay()) return
+    if (isTauri() || install.installed || isStandaloneDisplay()) return
     if (isDismissed()) return
     const seen = bumpSeen()
     // Wait until they’ve added a few books or visited a few times
@@ -48,7 +48,7 @@ export function SoftInstallPrompt() {
     return () => window.clearTimeout(t)
   }, [books.length, install.installed])
 
-  if (!visible || install.installed) return null
+  if (isTauri() || !visible || install.installed) return null
 
   const dismiss = () => {
     try {

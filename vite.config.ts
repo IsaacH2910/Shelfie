@@ -126,20 +126,28 @@ function shelfieDevApi(): Plugin {
 }
 
 // https://vite.dev/config/
+const isTauri = Boolean(process.env.TAURI_ENV_PLATFORM)
+
 export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
     },
   },
+  // Avoid Vite clearing the terminal when Tauri runs `beforeDevCommand`.
+  clearScreen: false,
   server: {
     // Expose on the local network so other devices (your phone) can open it.
     host: true,
+    strictPort: true,
   },
+  envPrefix: ['VITE_', 'TAURI_'],
   plugins: [
     react(),
     shelfieDevApi(),
     VitePWA({
+      // Native shell embeds the build; skip the service worker there.
+      disable: isTauri,
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {

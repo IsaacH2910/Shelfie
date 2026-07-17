@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { detectPlatform, isStandaloneDisplay } from '@/lib/platform'
+import { detectPlatform, isStandaloneDisplay, isTauri } from '@/lib/platform'
 
 type BeforeInstallPromptEvent = Event & {
   prompt: () => Promise<void>
@@ -10,10 +10,17 @@ export function usePwaInstall() {
   const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(
     null,
   )
-  const [installed, setInstalled] = useState(() => isStandaloneDisplay())
+  const [installed, setInstalled] = useState(
+    () => isTauri() || isStandaloneDisplay(),
+  )
   const platform = detectPlatform()
+  const tauri = isTauri()
 
   useEffect(() => {
+    if (tauri) {
+      setInstalled(true)
+      return
+    }
     setInstalled(isStandaloneDisplay())
 
     const onPrompt = (event: Event) => {
@@ -30,10 +37,10 @@ export function usePwaInstall() {
       window.removeEventListener('beforeinstallprompt', onPrompt)
       window.removeEventListener('appinstalled', onInstalled)
     }
-  }, [])
+  }, [tauri])
 
   return {
-    canInstall: deferred !== null && !installed,
+    canInstall: !tauri && deferred !== null && !installed,
     installed,
     platform,
     isIos: platform === 'ios',

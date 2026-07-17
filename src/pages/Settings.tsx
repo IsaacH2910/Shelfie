@@ -22,9 +22,11 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ImportExportPanel } from '@/components/ImportExportPanel'
+import { DesktopUpdateCard } from '@/components/DesktopUpdateCard'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/context/AuthProvider'
 import { useProfile, useUpdateProfile } from '@/hooks/useProfile'
+import { isTauri } from '@/lib/platform'
 import { supabase } from '@/lib/supabase'
 import { cn } from '@/lib/utils'
 
@@ -106,6 +108,7 @@ export default function SettingsPage() {
     { href: '#import-export', label: 'Import' },
     { href: '#shortcuts', label: 'Shortcuts' },
     { href: '#appearance', label: 'Appearance' },
+    ...(isTauri() ? ([{ href: '#desktop', label: 'Desktop' }] as const) : []),
     { href: '#account', label: 'Account' },
   ] as const
 
@@ -255,6 +258,8 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
+      <DesktopUpdateCard />
+
       <Card id="account">
         <CardHeader>
           <CardTitle className="text-base">Account</CardTitle>
@@ -285,12 +290,14 @@ export default function SettingsPage() {
               Link Gmail so you can sign in with Google or email on any device.
             </p>
           </div>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/download">
-              <Download className="h-4 w-4" />
-              Install app
-            </Link>
-          </Button>
+          {!isTauri() ? (
+            <Button asChild variant="outline" size="sm">
+              <Link to="/download">
+                <Download className="h-4 w-4" />
+                Install app
+              </Link>
+            </Button>
+          ) : null}
           <div>
             <Button
               variant="outline"

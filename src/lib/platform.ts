@@ -17,8 +17,18 @@ export function detectPlatform(): ClientPlatform {
   return 'other'
 }
 
+/** True when running inside the Tauri desktop shell. */
+export function isTauri(): boolean {
+  if (typeof window === 'undefined') return false
+  return (
+    '__TAURI_INTERNALS__' in window ||
+    '__TAURI__' in window
+  )
+}
+
 export function isStandaloneDisplay(): boolean {
   if (typeof window === 'undefined') return false
+  if (isTauri()) return true
   return (
     window.matchMedia('(display-mode: standalone)').matches ||
     window.matchMedia('(display-mode: fullscreen)').matches ||

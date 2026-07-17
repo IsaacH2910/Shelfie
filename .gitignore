@@ -17,6 +17,8 @@ playwright-report/
 
 # Tauri
 src-tauri/target
+src-tauri/keys/*.key
+!src-tauri/keys/*.key.pub
 
 # Editor directories and files
 .vscode/*

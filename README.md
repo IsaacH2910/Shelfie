@@ -82,10 +82,12 @@ confirmation is off). Vite serves [`api/book-lookup.mjs`](api/book-lookup.mjs) a
 | `npm run db:studio` | Open Supabase Studio |
 | `npm run desktop:dev` | Tauri desktop shell + Vite (needs Rust) |
 | `npm run desktop:build` | Bundle a native desktop app |
+| `npm run desktop:build:signed` | Mac build with updater signature (needs `src-tauri/keys/shelfie.key`) |
 
 ## Desktop shell (Tauri)
 
 Requires [Rust](https://www.rust-lang.org/tools/install) and Xcode CLT on macOS.
+Full build, unsigned install, and update instructions: **[`docs/DESKTOP.md`](docs/DESKTOP.md)**.
 
 ```bash
 npm install
