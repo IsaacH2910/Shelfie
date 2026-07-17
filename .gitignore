@@ -30,3 +30,8 @@ src-tauri/keys/*.key
 *.njsproj
 *.sln
 *.sw?
+.vercel
+.env.local
+.env.*.local
+.env.vercel.production
+!.env.example
