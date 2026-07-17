@@ -18,6 +18,7 @@ import { FullScreenLoader } from '@/components/Spinner'
 import { useBooks } from '@/hooks/useBooks'
 import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
 import { SHELF_SEP, shelfUsage } from '@/lib/shelves'
+import { shelfAccent } from '@/lib/shelfColors'
 import { cn } from '@/lib/utils'
 
 export default function ShelvesPage() {
@@ -75,23 +76,32 @@ export default function ShelvesPage() {
             const draft =
               capacityDrafts[shelf] ??
               (capacity != null ? String(capacity) : '')
+            const accent = shelfAccent(shelf)
 
             return (
               <Card
                 key={shelf}
                 className={cn(
-                  'cursor-pointer transition',
+                  'cursor-pointer border-l-4 transition',
                   selected === shelf
-                    ? 'border-primary ring-2 ring-primary/20'
+                    ? 'ring-2 ring-primary/30'
                     : 'hover:border-primary/40',
                 )}
+                style={{ borderLeftColor: accent.css }}
                 onClick={() =>
                   setSelected((s) => (s === shelf ? null : shelf))
                 }
               >
                 <CardHeader className="pb-2">
                   <CardTitle className="flex items-start justify-between gap-2 text-base">
-                    <span className="min-w-0 break-words">{shelf}</span>
+                    <span className="flex min-w-0 items-center gap-2 break-words">
+                      <span
+                        className="mt-1 h-2.5 w-2.5 shrink-0 rounded-full"
+                        style={{ background: accent.css }}
+                        aria-hidden
+                      />
+                      {shelf}
+                    </span>
                     <Badge variant={over ? 'warning' : 'muted'}>
                       {capacity != null ? `${usage}/${capacity}` : usage}
                     </Badge>
@@ -113,9 +123,12 @@ export default function ShelvesPage() {
                       <div
                         className={cn(
                           'h-full rounded-full transition-all',
-                          over ? 'bg-amber-500' : 'bg-primary',
+                          over ? 'bg-amber-500' : '',
                         )}
-                        style={{ width: `${pct ?? 0}%` }}
+                        style={{
+                          width: `${pct ?? 0}%`,
+                          background: over ? undefined : accent.css,
+                        }}
                       />
                     </div>
                   ) : (

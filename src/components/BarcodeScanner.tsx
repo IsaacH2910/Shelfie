@@ -7,13 +7,15 @@ import {
   HybridBinarizer,
   MultiFormatReader,
 } from '@zxing/library'
-import { Camera, CameraOff } from 'lucide-react'
+import { Camera, CameraOff, Flashlight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Spinner } from '@/components/Spinner'
 import {
   friendlyCameraError,
   openCameraStream,
+  setTorch,
   stopStream,
+  supportsTorch,
 } from '@/lib/camera'
 
 const ZXING_FORMATS = [
@@ -190,6 +192,8 @@ export function BarcodeScanner({
     'idle' | 'starting' | 'scanning' | 'error'
   >(initialStream ? 'starting' : 'idle')
   const [errorMessage, setErrorMessage] = useState('')
+  const [torchOn, setTorchOn] = useState(false)
+  const [torchAvailable, setTorchAvailable] = useState(false)
 
   onResultRef.current = onResult
   onErrorRef.current = onError
@@ -232,6 +236,8 @@ export function BarcodeScanner({
     ownsStreamRef.current = own
     firedRef.current = false
     rotationIndexRef.current = 0
+    setTorchOn(false)
+    setTorchAvailable(supportsTorch(stream))
     setStatus('starting')
     setErrorMessage('')
 
@@ -385,12 +391,32 @@ export function BarcodeScanner({
       ) : null}
 
       {status === 'scanning' ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-[28%] w-4/5 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
-          <p className="absolute bottom-6 left-0 right-0 px-4 text-center text-sm font-medium text-white/90">
-            Keep the ISBN bars level inside the box — avoid the small price code
-          </p>
-        </div>
+        <>
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+            <div className="h-[28%] w-4/5 rounded-xl border-2 border-white/90 shadow-[0_0_0_9999px_rgba(0,0,0,0.35)]" />
+            <p className="absolute bottom-6 left-0 right-0 px-4 text-center text-sm font-medium text-white/90">
+              Keep the ISBN bars level inside the box — avoid the small price
+              code
+            </p>
+          </div>
+          {torchAvailable ? (
+            <button
+              type="button"
+              className="absolute right-3 top-3 z-10 flex h-11 w-11 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm ring-1 ring-white/30"
+              aria-label={torchOn ? 'Turn flashlight off' : 'Turn flashlight on'}
+              onClick={() => {
+                const next = !torchOn
+                void setTorch(streamRef.current, next).then((ok) => {
+                  if (ok) setTorchOn(next)
+                })
+              }}
+            >
+              <Flashlight
+                className={`h-5 w-5 ${torchOn ? 'text-amber-300' : ''}`}
+              />
+            </button>
+          ) : null}
+        </>
       ) : null}
 
       {status === 'starting' ? (

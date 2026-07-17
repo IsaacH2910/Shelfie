@@ -263,7 +263,7 @@ export function computeAchievements(
   ]
 }
 
-/** Suggest unread owned books matching favorite authors/categories. */
+/** Suggest unread owned books using library affinity heuristics. */
 export function recommendNext(books: Book[], limit = 5): Book[] {
   const owned = books.filter((b) => (b.ownership ?? 'owned') === 'owned')
   const finished = owned.filter((b) => b.reading_status === 'finished')
@@ -283,6 +283,29 @@ export function recommendNext(books: Book[], limit = 5): Book[] {
     for (const c of b.categories ?? []) favCats.add(c.toLowerCase())
   }
 
+  const recentFinished = [...finished]
+    .filter((b) => b.reading_finished_at)
+    .sort((a, b) =>
+      (b.reading_finished_at ?? '').localeCompare(a.reading_finished_at ?? ''),
+    )
+    .slice(0, 8)
+  const favLangs = new Set(
+    recentFinished
+      .map((b) => (b.language ?? '').toLowerCase())
+      .filter(Boolean),
+  )
+  const avgRecentPages =
+    recentFinished.reduce((sum, b) => sum + (b.page_count ?? 0), 0) /
+    Math.max(1, recentFinished.filter((b) => b.page_count).length)
+
+  const finishedSeries = new Set(
+    finished
+      .map((b) => b.series?.trim().toLowerCase())
+      .filter(Boolean) as string[],
+  )
+
+  const now = Date.now()
+
   return [...unread]
     .map((book) => {
       let score = 0
@@ -292,7 +315,26 @@ export function recommendNext(books: Book[], limit = 5): Book[] {
       for (const c of book.categories ?? []) {
         if (favCats.has(c.toLowerCase())) score += 2
       }
-      if (book.series) score += 1
+      if (book.series) {
+        score += 1
+        const key = book.series.trim().toLowerCase()
+        if (finishedSeries.has(key)) score += 5
+      }
+      if (book.language && favLangs.has(book.language.toLowerCase())) {
+        score += 2
+      }
+      if (book.page_count && avgRecentPages > 0) {
+        const delta = Math.abs(book.page_count - avgRecentPages)
+        if (delta < 100) score += 2
+        else if (delta < 200) score += 1
+      }
+      // Demote long-paused titles that went stale
+      if (book.reading_status === 'paused' && book.updated_at) {
+        const days =
+          (now - new Date(book.updated_at).getTime()) / (1000 * 60 * 60 * 24)
+        if (days > 90) score -= 3
+        else if (days > 30) score -= 1
+      }
       return { book, score }
     })
     .sort((a, b) => b.score - a.score || a.book.title.localeCompare(b.book.title))

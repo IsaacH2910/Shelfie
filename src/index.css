@@ -147,4 +147,39 @@
       transform: translateY(0);
     }
   }
+
+  .shelfie-confetti {
+    pointer-events: none;
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    overflow: hidden;
+  }
+
+  .shelfie-confetti-piece {
+    position: absolute;
+    top: -8px;
+    left: 50%;
+    width: 8px;
+    height: 12px;
+    border-radius: 2px;
+    opacity: 0.95;
+    animation: shelfie-confetti-fall 1.35s ease-out forwards;
+    animation-delay: var(--delay);
+  }
+
+  @keyframes shelfie-confetti-fall {
+    0% {
+      transform: translate(0, 0) rotate(0deg);
+      opacity: 1;
+    }
+    100% {
+      transform: translate(var(--x), var(--y)) rotate(var(--r));
+      opacity: 0;
+    }
+  }
+
+  .pending-pulse {
+    @apply pointer-events-none absolute inset-0 rounded-[inherit] bg-background/40;
+  }
 }

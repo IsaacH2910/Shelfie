@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
@@ -6,75 +6,135 @@ import {
   Camera,
   MapPin,
   ScanBarcode,
+  Upload,
+  Users,
   WifiOff,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useBooks } from '@/hooks/useBooks'
 import { useProfile, useUpdateProfile } from '@/hooks/useProfile'
 
-const STEPS = [
-  {
-    id: 'welcome',
-    icon: BookMarked,
-    title: 'Welcome to Shelfie',
-    body: 'Your personal library, always with you — scan books, track reading, and keep shelves organized.',
-  },
-  {
-    id: 'camera',
-    icon: Camera,
-    title: 'Camera & offline',
-    body: 'Scan barcodes or covers to add books fast. Shelfie works offline; changes sync when you’re back online.',
-    extra: (
-      <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-        <WifiOff className="h-3.5 w-3.5" />
-        No signal? Keep browsing your library.
-      </p>
-    ),
-  },
-  {
-    id: 'shelves',
-    icon: MapPin,
-    title: 'Create your shelves',
-    body: 'Name physical spots like “Living room › Shelf A” so you always know where a book lives.',
-    action: (
-      <Button asChild variant="secondary" className="w-full">
-        <Link to="/organize#shelves">Set up shelves</Link>
-      </Button>
-    ),
-  },
-  {
-    id: 'scan',
-    icon: ScanBarcode,
-    title: 'Scan your first book',
-    body: 'Point the camera at an ISBN barcode — Shelfie fills in title, author, and cover for you.',
-    action: (
-      <Button asChild className="w-full">
-        <Link to="/add?scan=barcode">Scan a barcode</Link>
-      </Button>
-    ),
-  },
-] as const
+const SCAN_GOAL = 5
 
 export function Onboarding() {
   const { data: profile, isLoading } = useProfile()
+  const { data: books = [] } = useBooks()
   const updateProfile = useUpdateProfile()
   const [step, setStep] = useState(0)
 
+  const scannedCount = useMemo(
+    () =>
+      books.filter((b) => b.source === 'barcode' || b.source === 'ocr').length,
+    [books],
+  )
+  const scanProgress = Math.min(SCAN_GOAL, scannedCount)
+
   if (isLoading || !profile || profile.onboarding_completed) return null
+
+  const steps = [
+    {
+      id: 'welcome',
+      icon: BookMarked,
+      title: 'Welcome to Shelfie',
+      body: 'Your personal library, always with you — scan books, track reading, and keep shelves organized.',
+    },
+    {
+      id: 'camera',
+      icon: Camera,
+      title: 'Camera & offline',
+      body: 'Scan barcodes or covers to add books fast. Shelfie works offline; changes sync when you’re back online.',
+      extra: (
+        <p className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <WifiOff className="h-3.5 w-3.5" />
+          No signal? Keep browsing your library.
+        </p>
+      ),
+    },
+    {
+      id: 'shelves',
+      icon: MapPin,
+      title: 'Create your shelves',
+      body: 'Name physical spots like “Living room › Shelf A” so you always know where a book lives.',
+      action: (
+        <Button asChild variant="secondary" className="w-full">
+          <Link to="/organize#shelves">Set up shelves</Link>
+        </Button>
+      ),
+    },
+    {
+      id: 'scan',
+      icon: ScanBarcode,
+      title: 'Scan your first 5 books',
+      body: 'Point the camera at an ISBN barcode — Shelfie fills in title, author, and cover. Aim for five to fill your shelves.',
+      extra: (
+        <div className="w-full space-y-2 pt-1">
+          <div className="flex items-center justify-between text-xs font-medium">
+            <span className="text-muted-foreground">Progress</span>
+            <span>
+              {scanProgress} / {SCAN_GOAL}
+            </span>
+          </div>
+          <div className="h-2 overflow-hidden rounded-full bg-muted">
+            <div
+              className="h-full rounded-full bg-primary transition-all"
+              style={{
+                width: `${Math.round((scanProgress / SCAN_GOAL) * 100)}%`,
+              }}
+            />
+          </div>
+        </div>
+      ),
+      action: (
+        <div className="flex w-full flex-col gap-2">
+          <Button asChild className="h-11 w-full text-base">
+            <Link to="/add?scan=barcode">Scan a barcode</Link>
+          </Button>
+          <Button asChild variant="outline" className="h-11 w-full">
+            <Link to="/add?scan=batch">Scan multiple</Link>
+          </Button>
+        </div>
+      ),
+    },
+    {
+      id: 'household',
+      icon: Users,
+      title: 'Share with household',
+      body: 'Optional — invite family so everyone can see the same shelves and avoid buying doubles.',
+      action: (
+        <Button asChild variant="secondary" className="w-full">
+          <Link to="/household">Set up household</Link>
+        </Button>
+      ),
+    },
+    {
+      id: 'import',
+      icon: Upload,
+      title: 'Already have a library?',
+      body: 'Import a Goodreads CSV or Shelfie JSON backup to bring everything over in one go.',
+      action: (
+        <Button asChild variant="secondary" className="w-full">
+          <Link to="/settings#import-export">Import CSV / JSON</Link>
+        </Button>
+      ),
+    },
+  ] as const
 
   const complete = (skipped: boolean) => {
     updateProfile.mutate(
       { onboarding_completed: true },
       {
         onSuccess: () =>
-          toast.success(skipped ? 'You can revisit tips anytime' : 'You’re all set'),
+          toast.success(
+            skipped ? 'You can revisit tips anytime' : 'You’re all set',
+          ),
         onError: (e) => toast.error(e.message),
       },
     )
   }
 
-  const current = STEPS[step]
+  const current = steps[step]
   const Icon = current.icon
-  const isLast = step === STEPS.length - 1
+  const isLast = step === steps.length - 1
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-background/80 p-4 backdrop-blur-sm sm:items-center">
@@ -85,10 +145,10 @@ export function Onboarding() {
         className="w-full max-w-md rounded-2xl border border-border bg-card p-6 shadow-lg"
       >
         <div className="mb-5 flex justify-center gap-1.5">
-          {STEPS.map((s, i) => (
+          {steps.map((s, i) => (
             <span
               key={s.id}
-              className={`h-1.5 w-8 rounded-full transition ${
+              className={`h-1.5 w-6 rounded-full transition sm:w-8 ${
                 i <= step ? 'bg-primary' : 'bg-muted'
               }`}
             />
@@ -99,7 +159,10 @@ export function Onboarding() {
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary">
             <Icon className="h-7 w-7" />
           </div>
-          <h2 id="onboarding-title" className="text-xl font-bold tracking-tight">
+          <h2
+            id="onboarding-title"
+            className="text-xl font-bold tracking-tight"
+          >
             {current.title}
           </h2>
           <p className="text-sm text-muted-foreground">{current.body}</p>
@@ -140,7 +203,11 @@ export function Onboarding() {
                 Finish
               </Button>
             ) : (
-              <Button type="button" size="sm" onClick={() => setStep((s) => s + 1)}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setStep((s) => s + 1)}
+              >
                 Next
               </Button>
             )}

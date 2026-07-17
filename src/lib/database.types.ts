@@ -20,6 +20,7 @@ export interface Database {
           shelf_capacities: Json
           onboarding_completed: boolean
           yearly_reading_goal: number | null
+          smart_collections: Json
           created_at: string
         }
         Insert: {
@@ -32,6 +33,7 @@ export interface Database {
           shelf_capacities?: Json
           onboarding_completed?: boolean
           yearly_reading_goal?: number | null
+          smart_collections?: Json
           created_at?: string
         }
         Update: {
@@ -44,6 +46,7 @@ export interface Database {
           shelf_capacities?: Json
           onboarding_completed?: boolean
           yearly_reading_goal?: number | null
+          smart_collections?: Json
           created_at?: string
         }
         Relationships: []

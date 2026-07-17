@@ -1,8 +1,11 @@
 import type { ReactNode } from 'react'
+import { useMemo } from 'react'
 import { Link } from 'react-router-dom'
+import { toast } from 'sonner'
 import {
   ArrowRight,
   BookOpen,
+  Check,
   Heart,
   LibraryBig,
   ScanBarcode,
@@ -13,11 +16,17 @@ import { CoverImage } from '@/components/CoverImage'
 import { EmptyState } from '@/components/EmptyState'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { SoftInstallPrompt } from '@/components/SoftInstallPrompt'
 import { BackendUnavailable } from '@/components/BackendUnavailable'
 import { useAuth } from '@/context/AuthProvider'
-import { useBooks } from '@/hooks/useBooks'
+import { useBooks, usePatchBooks } from '@/hooks/useBooks'
 import { useProfile } from '@/hooks/useProfile'
-import { progressPercent } from '@/lib/reading'
+import { recommendNext } from '@/lib/analytics'
+import { celebrateMilestone } from '@/lib/milestones'
+import {
+  progressPercent,
+  readingTimestampsForStatus,
+} from '@/lib/reading'
 import { normalizeLanguageCode } from '@/lib/languages'
 
 function greeting(): string {
@@ -37,6 +46,7 @@ export default function HomePage() {
     refetch,
     isFetching,
   } = useBooks()
+  const patchBooks = usePatchBooks()
 
   const name =
     profile?.display_name ||
@@ -67,14 +77,77 @@ export default function HomePage() {
   )
   const goal = profile?.yearly_reading_goal ?? null
   const year = new Date().getFullYear()
+  const month = new Date().getMonth()
   const finishedThisYear = books.filter((b) => {
     if (b.reading_status !== 'finished' || !b.reading_finished_at) return false
     return new Date(b.reading_finished_at).getFullYear() === year
+  }).length
+  const finishedThisMonth = books.filter((b) => {
+    if (b.reading_status !== 'finished' || !b.reading_finished_at) return false
+    const d = new Date(b.reading_finished_at)
+    return d.getFullYear() === year && d.getMonth() === month
   }).length
   const goalPct =
     goal && goal > 0
       ? Math.min(100, Math.round((finishedThisYear / goal) * 100))
       : null
+
+  const nextReads = useMemo(() => recommendNext(books, 6), [books])
+
+  const markFinished = (id: string) => {
+    const book = books.find((b) => b.id === id)
+    if (!book) return
+    const prev = {
+      reading_status: book.reading_status,
+      current_page: book.current_page,
+      reading_started_at: book.reading_started_at,
+      reading_finished_at: book.reading_finished_at,
+    }
+    const stamps = readingTimestampsForStatus('finished', book)
+    const willHitGoal =
+      goal != null &&
+      goal > 0 &&
+      finishedThisYear + 1 >= goal &&
+      finishedThisYear < goal
+
+    void patchBooks
+      .mutateAsync({
+        ids: [id],
+        patch: {
+          reading_status: 'finished',
+          current_page: book.page_count ?? book.current_page,
+          ...stamps,
+        },
+      })
+      .then(() => {
+        if (willHitGoal) {
+          celebrateMilestone('goal')
+          toast.success('Yearly reading goal reached!', {
+            duration: 7000,
+            action: {
+              label: 'Undo',
+              onClick: () => {
+                void patchBooks.mutateAsync({ ids: [id], patch: prev })
+              },
+            },
+          })
+        } else {
+          celebrateMilestone('finish')
+          toast.success('Marked as finished', {
+            duration: 6000,
+            action: {
+              label: 'Undo',
+              onClick: () => {
+                void patchBooks.mutateAsync({ ids: [id], patch: prev })
+              },
+            },
+          })
+        }
+      })
+      .catch((err) =>
+        toast.error(err instanceof Error ? err.message : 'Could not update'),
+      )
+  }
 
   if (isBackendUnavailable && books.length === 0) {
     return (
@@ -190,12 +263,24 @@ export default function HomePage() {
                   </div>
                 ) : null
               })()}
-              <Button asChild size="sm" className="w-fit">
-                <Link to={`/book/${hero.id}`}>
-                  Continue reading
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button asChild size="sm" className="w-fit">
+                  <Link to={`/book/${hero.id}`}>
+                    Continue reading
+                    <ArrowRight className="h-4 w-4" />
+                  </Link>
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={patchBooks.isPending}
+                  onClick={() => markFinished(hero.id)}
+                >
+                  <Check className="h-4 w-4" />
+                  Mark finished
+                </Button>
+              </div>
             </div>
           </div>
         </section>
@@ -222,6 +307,11 @@ export default function HomePage() {
           icon={<BookOpen className="h-4 w-4" />}
           label="Finished"
           value={String(finished)}
+          hint={
+            finishedThisMonth > 0
+              ? `+${finishedThisMonth} this month`
+              : undefined
+          }
           to="/stats"
         />
         <StatCard
@@ -243,15 +333,20 @@ export default function HomePage() {
       {goal != null && goal > 0 ? (
         <section className="rounded-2xl border border-border bg-card/60 px-4 py-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold">
-              {year} reading goal
-            </h2>
-            <Link
-              to="/stats"
-              className="text-xs font-medium text-primary hover:underline"
-            >
-              Stats
-            </Link>
+            <h2 className="text-sm font-semibold">{year} reading goal</h2>
+            <div className="flex items-center gap-3">
+              {finishedThisMonth > 0 ? (
+                <span className="text-xs font-medium text-primary">
+                  +{finishedThisMonth} this month
+                </span>
+              ) : null}
+              <Link
+                to="/stats"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Stats
+              </Link>
+            </div>
           </div>
           <p className="mt-1 text-2xl font-semibold tracking-tight">
             {finishedThisYear}
@@ -269,6 +364,17 @@ export default function HomePage() {
         </section>
       ) : null}
 
+      <SoftInstallPrompt />
+
+      {nextReads.length > 0 ? (
+        <ShelfRow
+          title="Because you liked…"
+          to="/stats"
+          books={nextReads}
+          icon={<Sparkles className="h-3.5 w-3.5 text-primary" />}
+        />
+      ) : null}
+
       <ShelfRow title="Recently added" to="/library" books={recent} />
 
       {currentlyReading.length > 1 ? (
@@ -280,7 +386,11 @@ export default function HomePage() {
       ) : null}
 
       {wishlist.length > 0 ? (
-        <ShelfRow title="Wishlist" to="/library?ownership=wishlist" books={wishlist} />
+        <ShelfRow
+          title="Wishlist"
+          to="/library?ownership=wishlist"
+          books={wishlist}
+        />
       ) : null}
 
       {favorites.length > 0 ? (
@@ -306,11 +416,13 @@ function StatCard({
   icon,
   label,
   value,
+  hint,
   to,
 }: {
   icon: ReactNode
   label: string
   value: string
+  hint?: string
   to: string
 }) {
   return (
@@ -323,6 +435,9 @@ function StatCard({
         <span className="text-xs">{label}</span>
       </div>
       <p className="mt-1 text-2xl font-semibold tracking-tight">{value}</p>
+      {hint ? (
+        <p className="mt-0.5 text-[11px] font-medium text-primary">{hint}</p>
+      ) : null}
     </Link>
   )
 }

@@ -28,6 +28,8 @@ export type OcrResult = {
   text: string
   blob: Blob
   previewUrl: string
+  /** Tesseract confidence 0–100 when available. */
+  confidence?: number
 }
 
 async function rotateBlob(blob: Blob, degrees: 90 | 180 | 270): Promise<Blob> {
@@ -180,7 +182,9 @@ export function CoverScanner({
         )
         return
       }
-      const result = { text, blob: file, previewUrl }
+      const confidence =
+        typeof data.confidence === 'number' ? data.confidence : undefined
+      const result: OcrResult = { text, blob: file, previewUrl, confidence }
       const choices = splitOcrCandidates(text)
       if (choices.length > 1) {
         setPendingResult(result)
@@ -279,6 +283,9 @@ export function CoverScanner({
         <p className="text-xs text-muted-foreground">
           Multiple title-like blocks were found — pick one (useful for shelves
           with several books in frame).
+          {pendingResult.confidence != null
+            ? ` Overall OCR confidence: ${Math.round(pendingResult.confidence)}%.`
+            : ''}
         </p>
         <ul className="space-y-2">
           {textChoices.map((choice) => (

@@ -272,12 +272,16 @@ export default function AddBookPage() {
     setCaptured(result)
     setSearching(true)
     const query = buildQuery(result.text)
+    const conf =
+      result.confidence != null
+        ? ` · ${Math.round(result.confidence)}% OCR confidence`
+        : ''
     try {
       if (query.length < 3) {
         setCandidates([])
         toast.info(
           'Read some text, but not enough to search — use your photo or edit the form.',
-          { description: result.text.slice(0, 80) },
+          { description: `${result.text.slice(0, 80)}${conf}` },
         )
         return
       }
@@ -285,10 +289,12 @@ export default function AddBookPage() {
       setCandidates(found)
       if (found.length === 0) {
         toast.info('No match found — you can still save your photo.', {
-          description: query,
+          description: `${query}${conf}`,
         })
       } else {
-        toast.success(`Found ${found.length} possible match${found.length === 1 ? '' : 'es'}`)
+        toast.success(
+          `Found ${found.length} possible match${found.length === 1 ? '' : 'es'}${conf}`,
+        )
       }
     } finally {
       setSearching(false)

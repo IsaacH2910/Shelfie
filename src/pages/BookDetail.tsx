@@ -49,6 +49,8 @@ import {
 import { useHouseholds } from '@/hooks/useHouseholds'
 import { useAuth } from '@/context/AuthProvider'
 import { normalizeIsbn, normalizeText } from '@/lib/duplicates'
+import { buildBookInsight } from '@/lib/insights'
+import { getLanguage } from '@/lib/languages'
 import { uploadCover } from '@/lib/storage'
 import type { Book, BookDraft } from '@/types'
 
@@ -124,6 +126,11 @@ export default function BookDetailPage() {
       return normalizeText(other.title) === title
     })
   }, [books, book])
+
+  const insight = useMemo(() => {
+    if (!book) return ''
+    return buildBookInsight(book, books ?? [])
+  }, [book, books])
 
   if (isLoading && !book) return <FullScreenLoader />
 
@@ -456,6 +463,14 @@ export default function BookDetailPage() {
               </Badge>
             ))}
           </div>
+          {insight ? (
+            <div className="rounded-xl border border-border bg-card/60 p-4">
+              <h2 className="mb-1.5 text-sm font-semibold">Library insight</h2>
+              <p className="text-sm leading-relaxed text-muted-foreground">
+                {insight}
+              </p>
+            </div>
+          ) : null}
           {book.review ? (
             <div className="rounded-xl border border-border bg-card p-4">
               <h2 className="mb-2 text-sm font-semibold">Review</h2>
@@ -469,6 +484,20 @@ export default function BookDetailPage() {
               <h2 className="text-sm font-semibold text-muted-foreground">
                 Other editions ({related.length})
               </h2>
+              <p className="text-xs text-muted-foreground">
+                Also owned in{' '}
+                {[
+                  ...new Set(
+                    related
+                      .map(
+                        (r) =>
+                          getLanguage(r.language)?.name ?? r.language ?? '',
+                      )
+                      .filter(Boolean),
+                  ),
+                ].join(', ') || 'another edition'}
+                .
+              </p>
               <div className="grid grid-cols-3 gap-4 sm:grid-cols-4">
                 {related.map((other) => (
                   <BookCard key={other.id} book={other} />

@@ -73,8 +73,8 @@ function InviteDialog({ household }: { household: HouseholdWithRole }) {
         <DialogHeader>
           <DialogTitle>Invite to {household.name}</DialogTitle>
           <DialogDescription>
-            Share a link or code. Anyone who joins can see and add books in this
-            shared collection.
+            Share a link or code. Invites expire after 14 days. Anyone who joins
+            can see and add books in this shared collection.
           </DialogDescription>
         </DialogHeader>
 
@@ -82,27 +82,42 @@ function InviteDialog({ household }: { household: HouseholdWithRole }) {
           {(invites ?? []).map((invite) => (
             <div
               key={invite.id}
-              className="flex items-center gap-2 rounded-lg border border-border p-2"
+              className="flex flex-col gap-1.5 rounded-lg border border-border p-2.5 sm:flex-row sm:items-center sm:gap-2"
             >
               <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-sm">
                 {invite.code}
               </code>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => copy(inviteLink(invite.code), 'Invite link')}
-                aria-label="Copy link"
-              >
-                <Copy className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => deleteInvite.mutate(invite)}
-                aria-label="Revoke invite"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
+              <p className="text-[11px] text-muted-foreground sm:mr-auto">
+                {invite.expires_at
+                  ? `Expires ${new Date(invite.expires_at).toLocaleDateString(undefined, {
+                      month: 'short',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}`
+                  : 'No expiry'}
+                {invite.expires_at &&
+                new Date(invite.expires_at).getTime() < Date.now()
+                  ? ' · expired'
+                  : ''}
+              </p>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => copy(inviteLink(invite.code), 'Invite link')}
+                  aria-label="Copy link"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => deleteInvite.mutate(invite)}
+                  aria-label="Revoke invite"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           ))}
 

@@ -1,7 +1,8 @@
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { Camera } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { CoverImage } from '@/components/CoverImage'
+import { cn } from '@/lib/utils'
 
 export function CoverUpload({
   url,
@@ -15,10 +16,51 @@ export function CoverUpload({
   disabled?: boolean
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
+  const [dragging, setDragging] = useState(false)
+
+  const acceptFile = (file: File | undefined | null) => {
+    if (!file || disabled) return
+    if (!file.type.startsWith('image/')) return
+    onFile(file, URL.createObjectURL(file))
+  }
 
   return (
     <div className="space-y-2">
-      <CoverImage url={url} title={title || '?'} />
+      <div
+        className={cn(
+          'relative rounded-lg transition',
+          dragging && 'ring-2 ring-primary ring-offset-2 ring-offset-background',
+        )}
+        onDragEnter={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (!disabled) setDragging(true)
+        }}
+        onDragOver={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          if (!disabled) setDragging(true)
+        }}
+        onDragLeave={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setDragging(false)
+        }}
+        onDrop={(e) => {
+          e.preventDefault()
+          e.stopPropagation()
+          setDragging(false)
+          const file = e.dataTransfer.files?.[0]
+          acceptFile(file)
+        }}
+      >
+        <CoverImage url={url} title={title || '?'} />
+        {dragging ? (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-lg bg-primary/15 text-xs font-medium text-primary">
+            Drop cover image
+          </div>
+        ) : null}
+      </div>
       <input
         ref={inputRef}
         type="file"
@@ -27,8 +69,7 @@ export function CoverUpload({
         className="hidden"
         disabled={disabled}
         onChange={(e) => {
-          const file = e.target.files?.[0]
-          if (file) onFile(file, URL.createObjectURL(file))
+          acceptFile(e.target.files?.[0])
           e.target.value = ''
         }}
       />
@@ -43,6 +84,9 @@ export function CoverUpload({
         <Camera className="h-4 w-4" />
         {url ? 'Change cover photo' : 'Add cover photo'}
       </Button>
+      <p className="text-center text-[11px] text-muted-foreground">
+        Or drag and drop an image onto the cover
+      </p>
     </div>
   )
 }

@@ -27,6 +27,46 @@ export async function openCameraStream(): Promise<MediaStream> {
   }
 }
 
+export function getVideoTrack(
+  stream: MediaStream | null | undefined,
+): MediaStreamTrack | null {
+  return stream?.getVideoTracks()?.[0] ?? null
+}
+
+/** True when the active video track exposes a torch/flashlight. */
+export function supportsTorch(stream: MediaStream | null | undefined): boolean {
+  const track = getVideoTrack(stream)
+  if (!track) return false
+  const caps = track.getCapabilities?.() as
+    | (MediaTrackCapabilities & { torch?: boolean })
+    | undefined
+  return Boolean(caps?.torch)
+}
+
+export async function setTorch(
+  stream: MediaStream | null | undefined,
+  on: boolean,
+): Promise<boolean> {
+  const track = getVideoTrack(stream)
+  if (!track || !supportsTorch(stream)) return false
+  try {
+    await track.applyConstraints({
+      // @ts-expect-error torch is a non-standard but widely supported constraint
+      advanced: [{ torch: on }],
+    })
+    return true
+  } catch {
+    try {
+      await track.applyConstraints({
+        torch: on,
+      } as MediaTrackConstraints)
+      return true
+    } catch {
+      return false
+    }
+  }
+}
+
 export function friendlyCameraError(err: unknown): string {
   const name = err instanceof DOMException ? err.name : ''
   const message = err instanceof Error ? err.message : ''

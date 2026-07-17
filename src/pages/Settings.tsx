@@ -207,9 +207,22 @@ export default function SettingsPage() {
                 ⌘⇧S
               </kbd>
             </li>
+            <li className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Shortcut cheatsheet</span>
+              <kbd className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs">
+                ?
+              </kbd>
+            </li>
+            <li className="flex items-center justify-between gap-3">
+              <span className="text-muted-foreground">Library navigate</span>
+              <kbd className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs">
+                J / K
+              </kbd>
+            </li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            On Windows / Linux, use Ctrl instead of ⌘.
+            On Windows / Linux, use Ctrl instead of ⌘. Press ? anywhere to open
+            the cheatsheet.
           </p>
           <Button
             type="button"

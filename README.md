@@ -11,9 +11,12 @@ phone at the bookshop so you never buy a duplicate.
 - **Multilingual** — every book has a language; different‑language editions of the
   same title are welcomed and grouped, not blocked.
 - **Duplicate aware** — a warning if you already own a copy; you can still add it.
+- **Smart collections** — rule-based groups (e.g. “Read this year”, “500+ pages”).
+- **Library insights** — heuristic next-reads and per-book context from your shelves.
 - **Private + shared** — a private library and optional household collections.
 - **Works offline** — the catalog is cached for weak or no signal.
 - **Installable PWA** — add to home screen on iOS, Android, or desktop.
+- **Desktop shell (beta)** — optional Tauri 2 wrapper for a native macOS window.
 
 ## Tech stack
 
@@ -77,6 +80,21 @@ confirmation is off). Vite serves [`api/book-lookup.mjs`](api/book-lookup.mjs) a
 | `npm run db:stop` | Stop local Supabase |
 | `npm run db:reset` | Recreate DB and re-apply migrations |
 | `npm run db:studio` | Open Supabase Studio |
+| `npm run desktop:dev` | Tauri desktop shell + Vite (needs Rust) |
+| `npm run desktop:build` | Bundle a native desktop app |
+
+## Desktop shell (Tauri)
+
+Requires [Rust](https://www.rust-lang.org/tools/install) and Xcode CLT on macOS.
+
+```bash
+npm install
+npm run desktop:dev
+```
+
+Cross-device sync still uses Supabase (not iCloud). Native Spotlight indexing,
+Quick Look previews, and home-screen widgets are **future** Tauri plugins —
+stubs and notes live in [`src-tauri/src/lib.rs`](src-tauri/src/lib.rs).
 
 ## Deploy
 
@@ -118,8 +136,9 @@ src/
   components/       UI and feature components
   context/          Auth provider
   hooks/            Books, households, profile
-  lib/              Supabase, lookup, camera, OCR
+  lib/              Supabase, lookup, camera, OCR, smart collections
   pages/            App screens
+src-tauri/          Optional Tauri 2 desktop shell
 supabase/           Migrations + local config
 e2e/                Playwright tests + manual checklist
 ```

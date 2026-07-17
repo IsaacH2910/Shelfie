@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { Link } from 'react-router-dom'
-import { FolderOpen, MapPin, Tag } from 'lucide-react'
+import { FolderOpen, MapPin, Sparkles, Tag } from 'lucide-react'
 import {
   Card,
   CardContent,
@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { TaxonomyManager } from '@/components/TaxonomyManager'
+import { SmartCollectionsEditor } from '@/components/SmartCollectionsEditor'
 import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
 import { collectCategories } from '@/lib/categories'
 import { DEFAULT_COLLECTIONS } from '@/lib/collections'
@@ -149,6 +150,22 @@ export default function OrganizePage() {
             onRemove={taxonomy.removeCollection}
             busy={taxonomy.isSaving}
           />
+        </CardContent>
+      </Card>
+
+      <Card id="smart-collections">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Sparkles className="h-4 w-4 text-muted-foreground" />
+            Smart collections
+          </CardTitle>
+          <CardDescription>
+            Auto-group books from rules — filter them in Library without tagging
+            each title by hand.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <SmartCollectionsEditor />
         </CardContent>
       </Card>
 

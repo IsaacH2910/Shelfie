@@ -3,9 +3,11 @@ import { useVirtualizer } from '@tanstack/react-virtual'
 import { useWindowSize } from '@/hooks/useWindowSize'
 
 function columnsForWidth(width: number): number {
-  if (width >= 1024) return 6
-  if (width >= 768) return 5
-  if (width >= 640) return 4
+  // Fewer columns on wide screens → larger covers (macOS-feel density)
+  if (width >= 1280) return 5
+  if (width >= 1024) return 4
+  if (width >= 768) return 4
+  if (width >= 640) return 3
   return 3
 }
 
@@ -46,7 +48,7 @@ export function VirtualBookGrid<T>({
   if (items.length < 60) {
     return (
       <div
-        className="grid grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6"
+        className="grid grid-cols-3 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5"
         role="list"
         aria-label="Books"
       >
@@ -75,7 +77,7 @@ export function VirtualBookGrid<T>({
           return (
             <div
               key={virtualRow.key}
-              className="absolute left-0 top-0 grid w-full grid-cols-3 gap-4 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6"
+              className="absolute left-0 top-0 grid w-full grid-cols-3 gap-4 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-5"
               style={{
                 height: `${virtualRow.size - gap}px`,
                 transform: `translateY(${virtualRow.start}px)`,

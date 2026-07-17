@@ -16,6 +16,7 @@ import { AddFab } from '@/components/AddFab'
 import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
 import { LoanReminders } from '@/components/LoanReminders'
 import { MoreNav } from '@/components/MoreNav'
+import { OfflineBanner } from '@/components/OfflineBanner'
 import { Onboarding } from '@/components/Onboarding'
 import { ProfileMenu } from '@/components/ProfileMenu'
 import { FullScreenLoader } from '@/components/Spinner'
@@ -94,6 +95,7 @@ export function AppLayout() {
       <KeyboardShortcuts />
       <Onboarding />
       <LoanReminders />
+      <OfflineBanner />
 
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-border bg-card/40 px-4 py-5 md:flex">
         <div className="px-2">
@@ -145,7 +147,7 @@ export function AppLayout() {
       </header>
 
       <main id="main-content" className="md:pl-60" tabIndex={-1}>
-        <div className="mx-auto w-full max-w-5xl px-4 pb-28 pt-5 md:pb-12 md:pt-8">
+        <div className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 md:pb-12 md:pt-8">
           <Suspense fallback={<FullScreenLoader />}>
             <Outlet />
           </Suspense>

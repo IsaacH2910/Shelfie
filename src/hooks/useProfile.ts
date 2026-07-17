@@ -12,6 +12,7 @@ export type ProfilePatch = {
   shelf_capacities?: Json
   category_labels?: string[]
   shelf_locations?: string[]
+  smart_collections?: Json
 }
 
 export function useProfile() {
