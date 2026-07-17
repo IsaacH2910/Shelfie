@@ -3,13 +3,10 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   BarChart3,
   BookMarked,
-  FolderOpen,
   Home,
   Library,
   Search,
   Settings,
-  ShoppingBag,
-  Users,
 } from 'lucide-react'
 import { AddFab } from '@/components/AddFab'
 import { KeyboardShortcuts } from '@/components/KeyboardShortcuts'
@@ -21,18 +18,12 @@ import { ProfileMenu } from '@/components/ProfileMenu'
 import { FullScreenLoader } from '@/components/Spinner'
 import { cn } from '@/lib/utils'
 
-const SIDE_PRIMARY = [
+const SIDE_LINKS = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/library', label: 'Library', icon: Library, end: false },
   { to: '/search', label: 'Search', icon: Search, end: false },
-  { to: '/stats', label: 'Statistics', icon: BarChart3, end: false },
-] as const
-
-const SIDE_SECONDARY = [
-  { to: '/shop', label: 'Shop', icon: ShoppingBag },
-  { to: '/organize', label: 'Organize', icon: FolderOpen },
-  { to: '/household', label: 'Household', icon: Users },
-  { to: '/settings', label: 'Settings', icon: Settings },
+  { to: '/stats', label: 'Stats', icon: BarChart3, end: false },
+  { to: '/settings', label: 'Settings', icon: Settings, end: false },
 ] as const
 
 function Brand() {
@@ -95,34 +86,21 @@ export function AppLayout() {
       <LoanReminders />
       <OfflineBanner />
 
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-border bg-card/40 px-4 py-5 md:flex">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-56 flex-col border-r border-border bg-card/40 px-3 py-5 md:flex">
         <div className="px-2">
           <Brand />
         </div>
         <Link
           to="/add?scan=barcode"
-          className="mt-6 inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-[0.98]"
+          className="mt-6 inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground shadow-sm transition hover:bg-primary/90 active:scale-[0.98]"
         >
           Scan / Add
         </Link>
 
-        <nav className="mt-6 flex flex-1 flex-col gap-4 overflow-y-auto">
-          <div className="space-y-1">
-            <p className="px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Browse
-            </p>
-            {SIDE_PRIMARY.map((item) => (
-              <SideLink key={item.to} {...item} />
-            ))}
-          </div>
-          <div className="space-y-1">
-            <p className="px-3 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-              Manage
-            </p>
-            {SIDE_SECONDARY.map((item) => (
-              <SideLink key={item.to} {...item} />
-            ))}
-          </div>
+        <nav className="mt-6 flex flex-1 flex-col gap-1 overflow-y-auto">
+          {SIDE_LINKS.map((item) => (
+            <SideLink key={item.to} {...item} />
+          ))}
         </nav>
 
         <div className="border-t border-border pt-4">
@@ -137,7 +115,7 @@ export function AppLayout() {
         <ProfileMenu />
       </header>
 
-      <main id="main-content" className="md:pl-60" tabIndex={-1}>
+      <main id="main-content" className="md:pl-56" tabIndex={-1}>
         <div className="mx-auto w-full max-w-6xl px-4 pb-28 pt-5 md:pb-12 md:pt-8">
           <Suspense fallback={<FullScreenLoader />}>
             <Outlet />
@@ -145,14 +123,12 @@ export function AppLayout() {
         </div>
       </main>
 
-      {/* Mobile FAB — bottom-right above the tab bar */}
       {!hideFab ? (
         <div className="safe-fab fixed bottom-20 right-4 z-40 md:hidden">
           <AddFab />
         </div>
       ) : null}
 
-      {/* Desktop FAB */}
       {!hideFab ? (
         <div className="fixed bottom-6 right-6 z-40 hidden md:block">
           <AddFab />

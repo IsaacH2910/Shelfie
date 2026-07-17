@@ -45,6 +45,7 @@ export default function App() {
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/admin" element={<AdminPage />} />
+          <Route path="/download" element={<DownloadPage />} />
           <Route element={<ProtectedRoutes />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/library" element={<LibraryPage />} />
@@ -55,7 +56,6 @@ export default function App() {
             <Route path="/shop" element={<ShopPage />} />
             <Route path="/shelves" element={<ShelvesPage />} />
             <Route path="/organize" element={<OrganizePage />} />
-            <Route path="/download" element={<DownloadPage />} />
             <Route path="/household" element={<HouseholdPage />} />
             <Route path="/join/:code" element={<JoinPage />} />
             <Route path="/settings" element={<SettingsPage />} />
