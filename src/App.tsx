@@ -44,6 +44,7 @@ export default function App() {
       <Suspense fallback={<FullScreenLoader />}>
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/admin" element={<AdminPage />} />
           <Route element={<ProtectedRoutes />}>
             <Route path="/" element={<HomePage />} />
             <Route path="/library" element={<LibraryPage />} />
@@ -58,7 +59,6 @@ export default function App() {
             <Route path="/household" element={<HouseholdPage />} />
             <Route path="/join/:code" element={<JoinPage />} />
             <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/admin" element={<AdminPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

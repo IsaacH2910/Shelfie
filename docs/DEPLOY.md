@@ -92,7 +92,7 @@ The anon key is safe in the frontend; Row Level Security keeps users’ books pr
 | `VITE_SUPABASE_URL` | Project URL from A3 |
 | `VITE_SUPABASE_ANON_KEY` | anon key from A3 |
 | `VITE_GOOGLE_BOOKS_API_KEY` | Optional — higher Google Books quota |
-| `ADMIN_PASSWORD` | Password for the hidden `/admin` panel (account name is always `admin`). Set for **Production** and **Preview**. |
+| `ADMIN_PASSWORD` | Password for signing in as `admin` on the normal login page (opens `/admin`). Set for **Production** and **Preview**. |
 | `ADMIN_SESSION_SECRET` | Optional long random string for signing admin session tokens |
 
 Apply to **Production** and **Preview**. Vite bakes `VITE_*` in at build

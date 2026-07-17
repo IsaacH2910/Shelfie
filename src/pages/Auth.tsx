@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Spinner } from '@/components/Spinner'
 import { useAuth } from '@/context/AuthProvider'
+import { unlockAdminWithPassword } from '@/lib/adminSession'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { REDIRECT_KEY } from '@/lib/constants'
 
@@ -34,6 +35,10 @@ function GoogleIcon() {
 }
 
 type Mode = 'signIn' | 'signUp' | 'magic'
+
+function isAdminLogin(value: string) {
+  return value.trim().toLowerCase() === 'admin'
+}
 
 export default function AuthPage() {
   const { session } = useAuth()
@@ -67,17 +72,22 @@ export default function AuthPage() {
   }
 
   const handleMagicLink = async () => {
-    if (!email.trim()) return
+    const trimmed = email.trim()
+    if (!trimmed) return
+    if (isAdminLogin(trimmed)) {
+      toast.error('Use Sign in with a password for that account.')
+      return
+    }
     setLoading('email')
     const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
+      email: trimmed,
       options: { emailRedirectTo: redirectTo },
     })
     setLoading(null)
     if (error) {
       toast.error(error.message)
     } else {
-      setSentTo(email.trim())
+      setSentTo(trimmed)
     }
   }
 
@@ -86,7 +96,24 @@ export default function AuthPage() {
     if (!trimmed || !password) return
     setLoading('email')
 
+    // Same fields as everyone else — server checks ADMIN_PASSWORD.
+    if (isAdminLogin(trimmed) && mode !== 'signUp') {
+      const result = await unlockAdminWithPassword('admin', password)
+      setLoading(null)
+      if (!result.ok) {
+        toast.error(result.error ?? 'Invalid login credentials')
+        return
+      }
+      navigate('/admin', { replace: true })
+      return
+    }
+
     if (mode === 'signUp') {
+      if (isAdminLogin(trimmed) || !trimmed.includes('@')) {
+        setLoading(null)
+        toast.error('Enter a valid email address.')
+        return
+      }
       const { data, error } = await supabase.auth.signUp({
         email: trimmed,
         password,
@@ -97,10 +124,15 @@ export default function AuthPage() {
         toast.error(error.message)
         return
       }
-      // Confirmation required → no session yet
       if (!data.session) {
         setSentTo(trimmed)
       }
+      return
+    }
+
+    if (!trimmed.includes('@')) {
+      setLoading(null)
+      toast.error('Invalid login credentials')
       return
     }
 
@@ -110,10 +142,9 @@ export default function AuthPage() {
     })
     setLoading(null)
     if (error) {
-      const hint =
-        /invalid login credentials/i.test(error.message)
-          ? ' No account yet? Create one first.'
-          : ''
+      const hint = /invalid login credentials/i.test(error.message)
+        ? ' No account yet? Create one first.'
+        : ''
       toast.error(`${error.message}${hint}`)
     }
   }
@@ -175,7 +206,8 @@ export default function AuthPage() {
             </span>
             <h2 className="text-lg font-semibold">Check your inbox</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              We sent a link to <span className="font-medium text-foreground">{sentTo}</span>.
+              We sent a link to{' '}
+              <span className="font-medium text-foreground">{sentTo}</span>.
               Open it on this device to finish.
             </p>
             <Button
@@ -220,11 +252,11 @@ export default function AuthPage() {
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
-                  type="email"
+                  type="text"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@gmail.com"
-                  autoComplete="email"
+                  autoComplete="username"
                   inputMode="email"
                   className="h-11"
                   required
@@ -239,11 +271,15 @@ export default function AuthPage() {
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="At least 6 characters"
+                    placeholder={
+                      mode === 'signUp'
+                        ? 'At least 6 characters'
+                        : 'Your password'
+                    }
                     autoComplete={
                       mode === 'signUp' ? 'new-password' : 'current-password'
                     }
-                    minLength={6}
+                    minLength={mode === 'signUp' ? 6 : undefined}
                     className="h-11"
                     required
                   />

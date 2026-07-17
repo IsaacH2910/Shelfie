@@ -1,5 +1,5 @@
-import { useState, type FormEvent } from 'react'
-import { Link } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, Navigate, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   ArrowLeft,
@@ -10,8 +10,6 @@ import {
   Trash2,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Card,
   CardContent,
@@ -20,104 +18,39 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { CrashLogPanel } from '@/components/CrashLogPanel'
-import { Spinner } from '@/components/Spinner'
+import { useAuth } from '@/context/AuthProvider'
 import { useUpdateProfile } from '@/hooks/useProfile'
 import { queryClient } from '@/lib/queryClient'
-import {
-  clearAdminToken,
-  isAdminSessionValid,
-  unlockAdminWithPassword,
-} from '@/lib/adminSession'
+import { clearAdminToken, isAdminSessionValid } from '@/lib/adminSession'
 
 export default function AdminPage() {
+  const navigate = useNavigate()
+  const { session } = useAuth()
   const [unlocked, setUnlocked] = useState(() => isAdminSessionValid())
-  const [username, setUsername] = useState('admin')
-  const [password, setPassword] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
   const updateProfile = useUpdateProfile()
 
-  const handleUnlock = async (e: FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError('')
-    const result = await unlockAdminWithPassword(username, password)
-    setLoading(false)
-    if (result.ok) {
-      setUnlocked(true)
-      setPassword('')
-    } else {
-      clearAdminToken()
-      setError(result.error ?? 'Not authorized')
-    }
-  }
+  useEffect(() => {
+    setUnlocked(isAdminSessionValid())
+  }, [])
 
   const handleLock = () => {
     clearAdminToken()
     setUnlocked(false)
-    setPassword('')
+    navigate('/auth', { replace: true })
   }
 
   if (!unlocked) {
-    return (
-      <div className="mx-auto max-w-sm space-y-6 animate-in">
-        <Button asChild variant="ghost" size="sm" className="-ml-2">
-          <Link to="/">
-            <ArrowLeft className="h-4 w-4" />
-            Back
-          </Link>
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Sign in with the admin account to open support tools.
-          </p>
-        </div>
-        <form onSubmit={(e) => void handleUnlock(e)} className="space-y-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="admin-user">Account</Label>
-            <Input
-              id="admin-user"
-              type="text"
-              autoComplete="username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              placeholder="admin"
-              required
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="admin-pass">Password</Label>
-            <Input
-              id="admin-pass"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-            />
-          </div>
-          {error ? (
-            <p className="text-sm text-destructive" role="alert">
-              {error}
-            </p>
-          ) : null}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? <Spinner className="h-4 w-4" /> : 'Unlock'}
-          </Button>
-        </form>
-      </div>
-    )
+    return <Navigate to="/auth" replace />
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 animate-in">
+    <div className="mx-auto min-h-screen max-w-2xl space-y-6 px-4 py-8 animate-in">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <Button asChild variant="ghost" size="sm" className="-ml-2 mb-2">
-            <Link to="/settings">
+            <Link to={session ? '/settings' : '/auth'}>
               <ArrowLeft className="h-4 w-4" />
-              Settings
+              {session ? 'Settings' : 'Sign in'}
             </Link>
           </Button>
           <h1 className="text-2xl font-bold tracking-tight">Admin</h1>
@@ -157,7 +90,7 @@ export default function AdminPage() {
             type="button"
             variant="outline"
             size="sm"
-            disabled={updateProfile.isPending}
+            disabled={!session || updateProfile.isPending}
             onClick={() => {
               updateProfile.mutate(
                 { onboarding_completed: false },
