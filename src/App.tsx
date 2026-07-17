@@ -21,6 +21,7 @@ const JoinPage = lazyWithRetry(() => import('@/pages/Join'))
 const StatsPage = lazyWithRetry(() => import('@/pages/Stats'))
 const ShopPage = lazyWithRetry(() => import('@/pages/Shop'))
 const ShelvesPage = lazyWithRetry(() => import('@/pages/Shelves'))
+const AdminPage = lazyWithRetry(() => import('@/pages/Admin'))
 
 function ProtectedRoutes() {
   const { session, loading } = useAuth()
@@ -57,6 +58,7 @@ export default function App() {
             <Route path="/household" element={<HouseholdPage />} />
             <Route path="/join/:code" element={<JoinPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/admin" element={<AdminPage />} />
           </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

@@ -1,17 +1,12 @@
 import { Link } from 'react-router-dom'
 import {
-  BarChart3,
   Check,
   Download,
-  FolderOpen,
   LogOut,
-  MapPin,
   Monitor,
   Moon,
   Settings,
-  ShoppingBag,
   Sun,
-  Users,
 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -91,45 +86,15 @@ export function ProfileMenu() {
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link to="/stats">
-            <BarChart3 />
-            Stats
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/shop">
-            <ShoppingBag />
-            Shop mode
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/organize">
-            <FolderOpen />
-            Organize
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/shelves">
-            <MapPin />
-            Shelves
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/household">
-            <Users />
-            Household
+          <Link to="/settings">
+            <Settings />
+            Settings
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/download">
             <Download />
-            Download app
-          </Link>
-        </DropdownMenuItem>
-        <DropdownMenuItem asChild>
-          <Link to="/settings">
-            <Settings />
-            Settings
+            Install app
           </Link>
         </DropdownMenuItem>
         <DropdownMenuSeparator />

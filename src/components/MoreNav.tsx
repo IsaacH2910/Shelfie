@@ -1,12 +1,9 @@
 import { Link } from 'react-router-dom'
 import {
-  Download,
   FolderOpen,
-  Keyboard,
   MoreHorizontal,
   Settings,
   ShoppingBag,
-  Upload,
   Users,
 } from 'lucide-react'
 import {
@@ -20,13 +17,30 @@ import {
 import { cn } from '@/lib/utils'
 
 const MORE_LINKS = [
-  { to: '/organize', label: 'Organize', icon: FolderOpen, hint: 'Categories, shelves, collections' },
-  { to: '/shop', label: 'Shop mode', icon: ShoppingBag, hint: 'Check before you buy' },
-  { to: '/household', label: 'Household', icon: Users, hint: 'Share your library' },
-  { to: '/download', label: 'Download app', icon: Download, hint: 'Phone & computer' },
-  { to: '/settings', label: 'Settings', icon: Settings, hint: 'Account & appearance' },
-  { to: '/settings#import-export', label: 'Import / export', icon: Upload, hint: 'CSV & Goodreads' },
-  { to: '/settings#shortcuts', label: 'Keyboard shortcuts', icon: Keyboard, hint: 'Desktop tips' },
+  {
+    to: '/shop',
+    label: 'Shop mode',
+    icon: ShoppingBag,
+    hint: 'Check before you buy',
+  },
+  {
+    to: '/organize',
+    label: 'Organize',
+    icon: FolderOpen,
+    hint: 'Categories, shelves, collections',
+  },
+  {
+    to: '/household',
+    label: 'Household',
+    icon: Users,
+    hint: 'Share your library',
+  },
+  {
+    to: '/settings',
+    label: 'Settings',
+    icon: Settings,
+    hint: 'Account & appearance',
+  },
 ] as const
 
 export function MoreNav({ className }: { className?: string }) {
@@ -45,7 +59,7 @@ export function MoreNav({ className }: { className?: string }) {
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" className="mb-2 w-64">
-        <DropdownMenuLabel>More tools</DropdownMenuLabel>
+        <DropdownMenuLabel>More</DropdownMenuLabel>
         <DropdownMenuSeparator />
         {MORE_LINKS.map(({ to, label, icon: Icon, hint }) => (
           <DropdownMenuItem key={to} asChild>

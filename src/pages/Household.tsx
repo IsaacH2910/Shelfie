@@ -307,10 +307,10 @@ export default function HouseholdPage() {
   const { data: households, isLoading } = useHouseholds()
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-6 animate-in">
       <header>
         <h1 className="text-2xl font-bold tracking-tight">Household</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           Share a collection so nobody buys the same book twice.
         </p>
       </header>

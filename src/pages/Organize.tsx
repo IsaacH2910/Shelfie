@@ -74,9 +74,9 @@ export default function OrganizePage() {
     <div className="mx-auto max-w-2xl space-y-6 animate-in">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Organize</h1>
-        <p className="text-sm text-muted-foreground">
-          Categories, shelf locations, and collections — kept out of Settings so
-          you can manage them in one place.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Categories, shelves, collections, and smart rules — manage labels in
+          one place.
         </p>
       </div>
 

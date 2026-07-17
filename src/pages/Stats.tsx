@@ -154,10 +154,10 @@ export default function StatsPage() {
   if (isLoading && books.length === 0) return <FullScreenLoader />
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 animate-in">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Stats</h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="mt-1 text-sm text-muted-foreground">
           How your library and reading are growing.
         </p>
       </div>

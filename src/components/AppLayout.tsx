@@ -3,7 +3,6 @@ import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
 import {
   BarChart3,
   BookMarked,
-  Download,
   FolderOpen,
   Home,
   Library,
@@ -30,9 +29,8 @@ const SIDE_PRIMARY = [
 ] as const
 
 const SIDE_SECONDARY = [
-  { to: '/organize', label: 'Organize', icon: FolderOpen },
-  { to: '/shelves', label: 'Shelves', icon: Library },
   { to: '/shop', label: 'Shop', icon: ShoppingBag },
+  { to: '/organize', label: 'Organize', icon: FolderOpen },
   { to: '/household', label: 'Household', icon: Users },
   { to: '/settings', label: 'Settings', icon: Settings },
 ] as const
@@ -124,13 +122,6 @@ export function AppLayout() {
             {SIDE_SECONDARY.map((item) => (
               <SideLink key={item.to} {...item} />
             ))}
-            <Link
-              to="/download"
-              className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-            >
-              <Download className="h-4.5 w-4.5" />
-              Download app
-            </Link>
           </div>
         </nav>
 

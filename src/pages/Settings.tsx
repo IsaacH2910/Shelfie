@@ -3,15 +3,13 @@ import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
 import {
   Check,
-  FolderOpen,
+  Download,
   Keyboard,
   Link2,
   LogOut,
   Monitor,
   Moon,
-  Sparkles,
   Sun,
-  Bug,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +22,6 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ImportExportPanel } from '@/components/ImportExportPanel'
-import { CrashLogPanel } from '@/components/CrashLogPanel'
 import { useTheme } from '@/components/theme-provider'
 import { useAuth } from '@/context/AuthProvider'
 import { useProfile, useUpdateProfile } from '@/hooks/useProfile'
@@ -65,42 +62,26 @@ export default function SettingsPage() {
     )
   }
 
-  const reopenTips = () => {
-    updateProfile.mutate(
-      { onboarding_completed: false },
-      {
-        onSuccess: () => toast.success('Tips will show again'),
-        onError: (e) => toast.error(e.message),
-      },
-    )
-  }
-
   const TOC = [
     { href: '#import-export', label: 'Import' },
     { href: '#shortcuts', label: 'Shortcuts' },
-    { href: '#diagnostics', label: 'Diagnostics' },
+    { href: '#appearance', label: 'Appearance' },
+    { href: '#account', label: 'Account' },
   ] as const
 
   return (
     <div className="mx-auto max-w-2xl space-y-6 animate-in">
       <div className="space-y-3">
-        <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Settings</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Profile, backups, appearance, and account.
+          </p>
+        </div>
         <nav
           aria-label="Settings sections"
           className="flex gap-1.5 overflow-x-auto pb-0.5"
         >
-          <Link
-            to="/download"
-            className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
-          >
-            Download
-          </Link>
-          <Link
-            to="/organize"
-            className="shrink-0 rounded-full border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:text-foreground"
-          >
-            Organize
-          </Link>
           {TOC.map((item) => (
             <a
               key={item.href}
@@ -144,23 +125,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card className="border-dashed">
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <FolderOpen className="h-4 w-4 text-muted-foreground" />
-            Categories, shelves & collections
-          </CardTitle>
-          <CardDescription>
-            Manage labels and shelf locations on the Organize page.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Button asChild variant="outline" size="sm">
-            <Link to="/organize">Open Organize</Link>
-          </Button>
-        </CardContent>
-      </Card>
-
       <Card id="import-export">
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-base">
@@ -184,7 +148,8 @@ export default function SettingsPage() {
             Keyboard shortcuts
           </CardTitle>
           <CardDescription>
-            Desktop shortcuts while you’re not typing in a field.
+            Desktop shortcuts while you’re not typing in a field. Press ? for a
+            cheatsheet.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -208,12 +173,6 @@ export default function SettingsPage() {
               </kbd>
             </li>
             <li className="flex items-center justify-between gap-3">
-              <span className="text-muted-foreground">Shortcut cheatsheet</span>
-              <kbd className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs">
-                ?
-              </kbd>
-            </li>
-            <li className="flex items-center justify-between gap-3">
               <span className="text-muted-foreground">Library navigate</span>
               <kbd className="rounded-md border border-border bg-muted px-2 py-0.5 font-mono text-xs">
                 J / K
@@ -221,38 +180,12 @@ export default function SettingsPage() {
             </li>
           </ul>
           <p className="text-xs text-muted-foreground">
-            On Windows / Linux, use Ctrl instead of ⌘. Press ? anywhere to open
-            the cheatsheet.
+            On Windows / Linux, use Ctrl instead of ⌘.
           </p>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={reopenTips}
-            disabled={updateProfile.isPending}
-          >
-            <Sparkles className="h-4 w-4" />
-            Show welcome tips again
-          </Button>
         </CardContent>
       </Card>
 
-      <Card id="diagnostics">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-base">
-            <Bug className="h-4 w-4 text-muted-foreground" />
-            Diagnostics
-          </CardTitle>
-          <CardDescription>
-            Local crash log for this device — export if something breaks.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <CrashLogPanel />
-        </CardContent>
-      </Card>
-
-      <Card>
+      <Card id="appearance">
         <CardHeader>
           <CardTitle className="text-base">Appearance</CardTitle>
           <CardDescription>Choose how Shelfie looks.</CardDescription>
@@ -262,6 +195,7 @@ export default function SettingsPage() {
             {THEMES.map(({ value, label, icon: Icon }) => (
               <button
                 key={value}
+                type="button"
                 onClick={() => setTheme(value)}
                 className={cn(
                   'flex flex-col items-center gap-2 rounded-xl border p-4 text-sm font-medium transition-colors',
@@ -281,20 +215,28 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="account">
         <CardHeader>
           <CardTitle className="text-base">Account</CardTitle>
           <CardDescription>{user?.email}</CardDescription>
         </CardHeader>
-        <CardContent>
-          <Button
-            variant="outline"
-            className="text-destructive"
-            onClick={() => void signOut()}
-          >
-            <LogOut className="h-4 w-4" />
-            Sign out
+        <CardContent className="space-y-3">
+          <Button asChild variant="outline" size="sm">
+            <Link to="/download">
+              <Download className="h-4 w-4" />
+              Install app
+            </Link>
           </Button>
+          <div>
+            <Button
+              variant="outline"
+              className="text-destructive"
+              onClick={() => void signOut()}
+            >
+              <LogOut className="h-4 w-4" />
+              Sign out
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

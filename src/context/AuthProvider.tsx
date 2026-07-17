@@ -9,6 +9,7 @@ import {
 import type { Session, User } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import { queryClient } from '@/lib/queryClient'
+import { clearAdminToken } from '@/lib/adminSession'
 
 type AuthState = {
   session: Session | null
@@ -41,7 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession)
       // Drop cached data belonging to the previous user on sign-out.
-      if (!nextSession) queryClient.clear()
+      if (!nextSession) {
+        clearAdminToken()
+        queryClient.clear()
+      }
     })
 
     return () => {
@@ -56,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       signOut: async () => {
+        clearAdminToken()
         await supabase.auth.signOut()
       },
     }),

@@ -20,6 +20,12 @@ import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -582,15 +588,22 @@ export default function LibraryPage() {
                 <List className="h-4 w-4" />
               </button>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={exportCsv}
-              title="Export CSV"
-            >
-              <Download className="h-4 w-4" />
-              <span className="hidden sm:inline">Export</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4" />
+                  <span className="hidden sm:inline">Export</span>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportCsv}>
+                  Export CSV
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={exportJson}>
+                  Export JSON
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Button
               variant="outline"
               size="sm"
@@ -811,16 +824,6 @@ export default function LibraryPage() {
                   <SelectItem value="rating">Highest rated</SelectItem>
                 </SelectContent>
               </Select>
-
-              <Button
-                type="button"
-                size="sm"
-                variant="ghost"
-                className="text-xs"
-                onClick={exportJson}
-              >
-                JSON
-              </Button>
             </div>
           </div>
         </div>

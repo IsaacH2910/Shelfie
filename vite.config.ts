@@ -3,13 +3,74 @@ import { pathToFileURL, fileURLToPath, URL } from 'node:url'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
-/** Serve /api/book-lookup in local vite so Asian ISBN lookup works off Vercel. */
-function bookLookupDevApi(): Plugin {
+/** Serve /api/book-lookup and /api/admin-unlock in local vite. */
+function shelfieDevApi(): Plugin {
   return {
-    name: 'shelfie-book-lookup-api',
+    name: 'shelfie-dev-api',
     configureServer(server) {
       server.middlewares.use(async (req, res, next) => {
-        if (!req.url?.startsWith('/api/book-lookup')) {
+        if (!req.url?.startsWith('/api/')) {
+          next()
+          return
+        }
+
+        if (req.url.startsWith('/api/admin-unlock')) {
+          try {
+            const apiPath = fileURLToPath(
+              new URL('./api/admin-unlock.mjs', import.meta.url),
+            )
+            const mod = (await import(
+              `${pathToFileURL(apiPath).href}?t=${Date.now()}`
+            )) as {
+              unlockWithPassword: (password: string) => {
+                ok: boolean
+                token?: string
+                expiresAt?: number
+                error?: string
+              }
+            }
+            let body = ''
+            await new Promise<void>((resolve) => {
+              req.on('data', (chunk: Buffer) => {
+                body += chunk.toString()
+              })
+              req.on('end', () => resolve())
+            })
+            let password = ''
+            try {
+              password = String(JSON.parse(body || '{}').password ?? '')
+            } catch {
+              password = ''
+            }
+            const result = mod.unlockWithPassword(password)
+            res.setHeader('Content-Type', 'application/json')
+            if (!result.ok) {
+              res.statusCode = result.error?.includes('not configured')
+                ? 503
+                : 401
+              res.end(JSON.stringify({ error: result.error }))
+              return
+            }
+            res.statusCode = 200
+            res.end(
+              JSON.stringify({
+                token: result.token,
+                expiresAt: result.expiresAt,
+              }),
+            )
+          } catch (err) {
+            res.statusCode = 500
+            res.setHeader('Content-Type', 'application/json')
+            res.end(
+              JSON.stringify({
+                error: err instanceof Error ? err.message : 'Unlock failed',
+              }),
+            )
+          }
+          return
+        }
+
+        if (!req.url.startsWith('/api/book-lookup')) {
           next()
           return
         }
@@ -67,7 +128,7 @@ export default defineConfig({
   },
   plugins: [
     react(),
-    bookLookupDevApi(),
+    shelfieDevApi(),
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],

@@ -17,7 +17,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { FullScreenLoader } from '@/components/Spinner'
 import { useBooks } from '@/hooks/useBooks'
 import { useLibraryTaxonomy } from '@/hooks/useLibraryTaxonomy'
-import { SHELF_SEP, shelfUsage } from '@/lib/shelves'
+import { shelfUsage } from '@/lib/shelves'
 import { shelfAccent } from '@/lib/shelfColors'
 import { cn } from '@/lib/utils'
 
@@ -43,12 +43,11 @@ export default function ShelvesPage() {
   if (isLoading && books.length === 0) return <FullScreenLoader />
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6 animate-in">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Shelves</h1>
-        <p className="text-sm text-muted-foreground">
-          Capacity map of your physical shelves. Use “{SHELF_SEP.trim()}” for
-          hierarchy — e.g. Living room{SHELF_SEP}Shelf A.
+        <p className="mt-1 text-sm text-muted-foreground">
+          Capacity map of your physical shelves. Manage labels in Organize.
         </p>
       </div>
 
