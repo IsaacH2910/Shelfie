@@ -9,10 +9,15 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
+import {
+  checkForDesktopUpdate,
+  clearSkippedUpdateVersion,
+  installDesktopUpdateAndRelaunch,
+} from '@/lib/desktopUpdater'
 import { isTauri } from '@/lib/platform'
 
 /**
- * Desktop-only: show version and check GitHub Releases for updates.
+ * Desktop-only: show version and manually check GitHub Releases for updates.
  */
 export function DesktopUpdateCard() {
   const [version, setVersion] = useState<string | null>(null)
@@ -31,17 +36,14 @@ export function DesktopUpdateCard() {
   const checkForUpdates = async () => {
     setChecking(true)
     try {
-      const { check } = await import('@tauri-apps/plugin-updater')
-      const { relaunch } = await import('@tauri-apps/plugin-process')
-      const update = await check()
+      clearSkippedUpdateVersion()
+      const update = await checkForDesktopUpdate()
       if (!update) {
         toast.message('You are up to date')
         return
       }
       toast.message(`Downloading ${update.version}…`)
-      await update.downloadAndInstall()
-      toast.success('Update installed — restarting')
-      await relaunch()
+      await installDesktopUpdateAndRelaunch(update)
     } catch (err) {
       toast.error(
         err instanceof Error ? err.message : 'Could not check for updates',
@@ -60,7 +62,8 @@ export function DesktopUpdateCard() {
         </CardTitle>
         <CardDescription>
           {version ? `Version ${version}` : 'Native Shelfie shell'}
-          . Updates come from GitHub Releases.
+          . Checks GitHub Releases automatically on launch; you can also check
+          here.
         </CardDescription>
       </CardHeader>
       <CardContent>

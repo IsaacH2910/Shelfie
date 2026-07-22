@@ -65,6 +65,19 @@ export default function DownloadPage() {
                   Chrome / Edge: install icon in the address bar. Safari: File →
                   Add to Dock.
                 </p>
+                <p className="pl-6 pt-2 text-muted-foreground">
+                  Mac desktop app:{' '}
+                  <a
+                    className="font-medium text-foreground underline-offset-4 hover:underline"
+                    href="https://github.com/IsaacH2910/Shelfie/releases/latest"
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    download the latest .dmg
+                  </a>
+                  . After install, Shelfie checks for updates online
+                  automatically.
+                </p>
               </div>
             </div>
           </div>

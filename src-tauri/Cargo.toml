@@ -1,6 +1,6 @@
 [package]
 name = "shelfie"
-version = "0.1.1"
+version = "0.1.2"
 description = "Shelfie — personal book library"
 authors = ["Shelfie"]
 edition = "2021"

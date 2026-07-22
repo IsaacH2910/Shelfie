@@ -1,8 +1,10 @@
 # Desktop app (Tauri)
 
-Native Mac shell around the Shelfie web app. First install uses a `.dmg`.
-Later versions update in-app from GitHub Releases (no Apple Developer account
-required for updates).
+Native Mac shell around the Shelfie web app. First install uses a `.dmg` from
+[GitHub Releases](https://github.com/IsaacH2910/Shelfie/releases/latest).
+Installed apps **auto-check** that same channel on launch (and every few hours)
+and prompt to install & restart. No Apple Developer account is required for
+updates (Tauri signs the updater payload separately).
 
 ## Prerequisites (macOS)
 
@@ -81,41 +83,60 @@ This build is **not** Apple-signed. Recipients may need:
 1. Open the `.dmg` and drag **Shelfie** to Applications
 2. Right-click **Shelfie** → **Open** (or System Settings → Privacy & Security → Open Anyway)
 
-## Ship an update
+After that, updates install in-app from GitHub Releases (no new Gatekeeper prompt
+for each update when replacing via the Tauri updater).
 
-The `.dmg` embeds the frontend at build time. After you change UI/client code:
+## Online distribution & auto-update
+
+Distribution channel: **GitHub Releases** →
+`https://github.com/IsaacH2910/Shelfie/releases/latest/download/latest.json`
+
+Client behavior (Tauri builds only):
+
+1. ~4s after launch, and every 6 hours while open, Shelfie checks `latest.json`
+2. If a newer version exists, a dialog offers **Install & restart** or **Later**
+3. **Later** skips that version until the next release (or until Settings → Check for updates)
+4. Settings → Desktop still has a manual check (clears a skipped version)
+
+### Ship an update
 
 1. Bump `version` in both [`src-tauri/tauri.conf.json`](../src-tauri/tauri.conf.json) and [`src-tauri/Cargo.toml`](../src-tauri/Cargo.toml)
-2. Rebuild with the signing key env set (same as above)
-3. Create a [GitHub Release](https://github.com/IsaacH2910/Shelfie/releases) and upload:
+2. Rebuild with the signing key:
+   ```bash
+   npm run desktop:build:signed
+   ```
+3. Generate updater manifest:
+   ```bash
+   npm run desktop:latest-json -- 0.1.2 "What changed"
+   ```
+4. Create a [GitHub Release](https://github.com/IsaacH2910/Shelfie/releases) tagged `v0.1.2` and upload:
    - `Shelfie_*.dmg` — first-time installers
    - `Shelfie.app.tar.gz` + `Shelfie.app.tar.gz.sig` — updater payload
-   - `latest.json` — see template below
-4. Installed apps: **Settings → Desktop → Check for updates**
+   - `latest.json` — from step 3 (must be named exactly `latest.json`)
 
-### `latest.json` template
+Installed apps pick it up on next launch (or within ~6 hours).
 
-Replace version, dates, URLs, and paste the `.sig` file contents into `signature`:
+### `latest.json` shape
 
 ```json
 {
-  "version": "0.1.1",
+  "version": "0.1.2",
   "notes": "Bug fixes",
-  "pub_date": "2026-07-17T00:00:00Z",
+  "pub_date": "2026-07-22T00:00:00Z",
   "platforms": {
     "darwin-aarch64": {
       "signature": "<contents of Shelfie.app.tar.gz.sig>",
-      "url": "https://github.com/IsaacH2910/Shelfie/releases/download/v0.1.1/Shelfie.app.tar.gz"
+      "url": "https://github.com/IsaacH2910/Shelfie/releases/download/v0.1.2/Shelfie.app.tar.gz"
     },
     "darwin-x86_64": {
       "signature": "<contents of Shelfie.app.tar.gz.sig>",
-      "url": "https://github.com/IsaacH2910/Shelfie/releases/download/v0.1.1/Shelfie.app.tar.gz"
+      "url": "https://github.com/IsaacH2910/Shelfie/releases/download/v0.1.2/Shelfie.app.tar.gz"
     }
   }
 }
 ```
 
-Name the asset exactly `latest.json` and attach it to the **latest** release (or keep a dedicated latest tag) so this endpoint works:
+Endpoint used by the app:
 
 `https://github.com/IsaacH2910/Shelfie/releases/latest/download/latest.json`
 

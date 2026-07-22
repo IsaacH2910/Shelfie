@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client'
 import { ThemeProvider } from '@/components/theme-provider'
 import { AuthProvider } from '@/context/AuthProvider'
+import { DesktopAutoUpdater } from '@/components/DesktopAutoUpdater'
 import { Toaster } from '@/components/ui/sonner'
 import { queryClient, persister, setupQueryCacheListeners, shouldPersistQuery, onPersistRestore } from '@/lib/queryClient'
 import { installGlobalCrashHandlers } from '@/lib/crashLog'
@@ -36,6 +37,7 @@ createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <BrowserRouter>
             <CrashHandlers />
+            <DesktopAutoUpdater />
             <App />
           </BrowserRouter>
           <Toaster />

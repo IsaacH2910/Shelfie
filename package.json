@@ -16,7 +16,8 @@
     "db:studio": "supabase studio",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build",
-    "desktop:build:signed": "bash scripts/desktop-build.sh"
+    "desktop:build:signed": "bash scripts/desktop-build.sh",
+    "desktop:latest-json": "bash scripts/write-latest-json.sh"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
