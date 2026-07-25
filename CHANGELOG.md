@@ -1,24 +1,25 @@
 # Changelog
 
-## 0.1.3 — 2026-07-26
+## 1.0.0 — 2026-07-26
 
-Pre-release hardening and QA pass for the macOS desktop installer.
+First stable macOS release after pre-release audit, security hardening, and E2E coverage.
 
 ### Security
-- Set a restrictive Content Security Policy for the Tauri webview
-- Restrict `/api/book-lookup` CORS to app, local, and Tauri origins (removed `*`)
-- Add per-IP rate limiting for book lookup and admin unlock
-- Add failed-attempt lockout on admin unlock
-- Wire Zod validation for book drafts, auth credentials, and JSON import
-- Remove unused `react-hook-form` / `@hookform/resolvers` dependencies
-- Align npm package version with the desktop app
+- Restrictive Content Security Policy for the Tauri webview
+- Restrict `/api/book-lookup` CORS to app, local, and Tauri origins
+- Per-IP rate limiting for book lookup and admin unlock
+- Failed-attempt lockout on admin unlock
+- Zod validation for book drafts, auth credentials, and JSON import
+- Remove unused `react-hook-form` / `@hookform/resolvers`
 
 ### Testing
-- Expand Playwright coverage: offline banner + cached library, offline save errors, barcode assist ISBN lookup / invalid digits, multi-device library sync
-- Enable fake camera permissions for headless barcode UI flows
+- Playwright: offline banner + cached library, offline save errors
+- Barcode assist ISBN lookup / invalid digits
+- Multi-device library sync
+- Fake camera permissions for headless barcode UI
 
 ### Build
-- Production signed macOS `.dmg` + updater artifacts for `v0.1.3`
+- Signed macOS `.dmg` + updater artifacts for `v1.0.0`
 
 ## 0.1.2 — 2026-07-22
 
