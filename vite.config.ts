@@ -22,14 +22,17 @@ function shelfieDevApi(): Plugin {
             const mod = (await import(
               `${pathToFileURL(apiPath).href}?t=${Date.now()}`
             )) as {
-              unlockWithPassword: (
+              attemptAdminUnlock: (
+                request: typeof req,
                 username: string,
                 password: string,
               ) => {
                 ok: boolean
+                status: number
                 token?: string
                 expiresAt?: number
                 error?: string
+                retryAfterSec?: number
               }
             }
             let body = ''
@@ -52,12 +55,13 @@ function shelfieDevApi(): Plugin {
               username = ''
               password = ''
             }
-            const result = mod.unlockWithPassword(username, password)
+            const result = mod.attemptAdminUnlock(req, username, password)
             res.setHeader('Content-Type', 'application/json')
+            if (result.retryAfterSec) {
+              res.setHeader('Retry-After', String(result.retryAfterSec))
+            }
             if (!result.ok) {
-              res.statusCode = result.error?.includes('not configured')
-                ? 503
-                : 401
+              res.statusCode = result.status
               res.end(JSON.stringify({ error: result.error }))
               return
             }
@@ -85,6 +89,36 @@ function shelfieDevApi(): Plugin {
           return
         }
         try {
+          const ratePath = fileURLToPath(
+            new URL('./api/rateLimit.mjs', import.meta.url),
+          )
+          const rateMod = (await import(
+            `${pathToFileURL(ratePath).href}?t=${Date.now()}`
+          )) as {
+            clientKey: (request: typeof req) => string
+            rateLimit: (opts: {
+              key: string
+              limit: number
+              windowMs: number
+            }) => { ok: true } | { ok: false; retryAfterSec: number }
+          }
+          const limited = rateMod.rateLimit({
+            key: `book-lookup:${rateMod.clientKey(req)}`,
+            limit: 60,
+            windowMs: 60_000,
+          })
+          res.setHeader('Content-Type', 'application/json')
+          if (!limited.ok) {
+            res.statusCode = 429
+            res.setHeader('Retry-After', String(limited.retryAfterSec))
+            res.end(
+              JSON.stringify({
+                error: `Too many lookups. Try again in ${limited.retryAfterSec}s.`,
+              }),
+            )
+            return
+          }
+
           const url = new URL(req.url, 'http://localhost')
           const isbn = url.searchParams.get('isbn') ?? ''
           const apiPath = fileURLToPath(
@@ -98,7 +132,6 @@ function shelfieDevApi(): Plugin {
             ) => Promise<Record<string, unknown> | null>
           }
           const result = await mod.lookupIsbnServer(isbn)
-          res.setHeader('Content-Type', 'application/json')
           if (!result) {
             res.statusCode = 404
             res.end(JSON.stringify({ error: 'Not found' }))

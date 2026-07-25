@@ -4,9 +4,18 @@
  */
 
 import { createHmac, timingSafeEqual, randomBytes } from 'node:crypto'
+import { applyCors } from './cors.mjs'
+import {
+  checkLockout,
+  clearAuthFailures,
+  clientKey,
+  rateLimit,
+  recordAuthFailure,
+} from './rateLimit.mjs'
 
 const TTL_MS = 1000 * 60 * 60 * 8 // 8 hours
 const ADMIN_USERNAME = 'admin'
+const MAX_BODY_BYTES = 4096
 
 function getPassword() {
   return process.env.ADMIN_PASSWORD ?? ''
@@ -83,8 +92,79 @@ export function unlockWithPassword(username, password) {
   }
 }
 
+/**
+ * Shared gate used by Vercel handler and Vite middleware.
+ * @param {import('http').IncomingMessage} req
+ * @param {string} username
+ * @param {string} password
+ */
+export function attemptAdminUnlock(req, username, password) {
+  const ip = clientKey(req)
+  const lockKey = `admin-lock:${ip}`
+  const rateKey = `admin-rate:${ip}`
+
+  const locked = checkLockout(lockKey)
+  if (locked.locked) {
+    return {
+      ok: false,
+      status: 429,
+      error: `Too many failed attempts. Try again in ${locked.retryAfterSec}s.`,
+      retryAfterSec: locked.retryAfterSec,
+    }
+  }
+
+  const limited = rateLimit({ key: rateKey, limit: 20, windowMs: 60_000 })
+  if (!limited.ok) {
+    return {
+      ok: false,
+      status: 429,
+      error: `Too many requests. Try again in ${limited.retryAfterSec}s.`,
+      retryAfterSec: limited.retryAfterSec,
+    }
+  }
+
+  const result = unlockWithPassword(username, password)
+  if (!result.ok) {
+    const fail = recordAuthFailure(lockKey)
+    if (fail.locked) {
+      return {
+        ok: false,
+        status: 429,
+        error: `Too many failed attempts. Try again in ${fail.retryAfterSec}s.`,
+        retryAfterSec: fail.retryAfterSec,
+      }
+    }
+    return {
+      ok: false,
+      status: result.error?.includes('not configured') ? 503 : 401,
+      error: result.error,
+    }
+  }
+
+  clearAuthFailures(lockKey)
+  return {
+    ok: true,
+    status: 200,
+    token: result.token,
+    expiresAt: result.expiresAt,
+  }
+}
+
 export default async function handler(req, res) {
   res.setHeader('Content-Type', 'application/json')
+
+  if (!applyCors(req, res, { methods: 'POST, OPTIONS' })) {
+    res.statusCode = 403
+    res.end(JSON.stringify({ error: 'Origin not allowed' }))
+    return
+  }
+
+  if (req.method === 'OPTIONS') {
+    res.statusCode = 204
+    res.end()
+    return
+  }
+
   if (req.method !== 'POST') {
     res.statusCode = 405
     res.end(JSON.stringify({ error: 'Method not allowed' }))
@@ -104,15 +184,17 @@ export default async function handler(req, res) {
   if (
     body.username === undefined &&
     body.password === undefined &&
-    req.method === 'POST' &&
     !req.body
   ) {
     body = await readJson(req)
   }
 
-  const result = unlockWithPassword(body.username, body.password)
+  const result = attemptAdminUnlock(req, body.username, body.password)
+  if (result.retryAfterSec) {
+    res.setHeader('Retry-After', String(result.retryAfterSec))
+  }
   if (!result.ok) {
-    res.statusCode = result.error?.includes('not configured') ? 503 : 401
+    res.statusCode = result.status
     res.end(JSON.stringify({ error: result.error }))
     return
   }
@@ -128,10 +210,20 @@ export default async function handler(req, res) {
 function readJson(req) {
   return new Promise((resolve) => {
     let raw = ''
+    let oversized = false
     req.on('data', (chunk) => {
+      if (oversized) return
       raw += chunk
+      if (raw.length > MAX_BODY_BYTES) {
+        oversized = true
+        raw = ''
+      }
     })
     req.on('end', () => {
+      if (oversized) {
+        resolve({})
+        return
+      }
       try {
         resolve(JSON.parse(raw || '{}'))
       } catch {

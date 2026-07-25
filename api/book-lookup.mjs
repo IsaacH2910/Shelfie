@@ -9,6 +9,9 @@
  * Internet Archive. Optional: VITE_GOOGLE_BOOKS_API_KEY for Google quota.
  */
 
+import { applyCors } from './cors.mjs'
+import { clientKey, rateLimit } from './rateLimit.mjs'
+
 function normalizeIsbn(value) {
   return String(value ?? '')
     .replace(/[^0-9xX]/g, '')
@@ -541,14 +544,29 @@ async function lookupIsbnServer(rawIsbn) {
 export { lookupIsbnServer, isJapaneseClassificationCode }
 
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*')
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS')
+  if (!applyCors(req, res, { methods: 'GET, OPTIONS' })) {
+    res.status(403).json({ error: 'Origin not allowed' })
+    return
+  }
   if (req.method === 'OPTIONS') {
     res.status(204).end()
     return
   }
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method not allowed' })
+    return
+  }
+
+  const limited = rateLimit({
+    key: `book-lookup:${clientKey(req)}`,
+    limit: 60,
+    windowMs: 60_000,
+  })
+  if (!limited.ok) {
+    res.setHeader('Retry-After', String(limited.retryAfterSec))
+    res.status(429).json({
+      error: `Too many lookups. Try again in ${limited.retryAfterSec}s.`,
+    })
     return
   }
 

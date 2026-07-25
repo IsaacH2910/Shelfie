@@ -10,6 +10,10 @@ import { useAuth } from '@/context/AuthProvider'
 import { unlockAdminWithPassword } from '@/lib/adminSession'
 import { supabase, isSupabaseConfigured } from '@/lib/supabase'
 import { REDIRECT_KEY } from '@/lib/constants'
+import {
+  authEmailSchema,
+  validateAuthCredentials,
+} from '@/lib/validation'
 
 function GoogleIcon() {
   return (
@@ -79,23 +83,37 @@ export default function AuthPage() {
       toast.error('Use Sign in with a password for that account.')
       return
     }
+    const emailCheck = authEmailSchema.safeParse(trimmed)
+    if (!emailCheck.success) {
+      toast.error(
+        emailCheck.error.issues[0]?.message ?? 'Enter a valid email address',
+      )
+      return
+    }
     setLoading('email')
     const { error } = await supabase.auth.signInWithOtp({
-      email: trimmed,
+      email: emailCheck.data,
       options: { emailRedirectTo: redirectTo },
     })
     setLoading(null)
     if (error) toast.error(error.message)
-    else setSentTo(trimmed)
+    else setSentTo(emailCheck.data)
   }
 
   const handlePassword = async () => {
-    const trimmed = email.trim()
-    if (!trimmed || !password) return
+    const requireEmail = !(isAdminLogin(email) && mode !== 'signUp')
+    const validated = validateAuthCredentials(email, password, {
+      requireEmail,
+    })
+    if (!validated.ok) {
+      toast.error(validated.message)
+      return
+    }
+    const trimmed = validated.identifier
     setLoading('email')
 
     if (isAdminLogin(trimmed) && mode !== 'signUp') {
-      const result = await unlockAdminWithPassword('admin', password)
+      const result = await unlockAdminWithPassword('admin', validated.password)
       setLoading(null)
       if (!result.ok) {
         toast.error(result.error ?? 'Invalid login credentials')
@@ -106,14 +124,14 @@ export default function AuthPage() {
     }
 
     if (mode === 'signUp') {
-      if (isAdminLogin(trimmed) || !trimmed.includes('@')) {
+      if (isAdminLogin(trimmed)) {
         setLoading(null)
         toast.error('Enter a valid email address.')
         return
       }
       const { data, error } = await supabase.auth.signUp({
         email: trimmed,
-        password,
+        password: validated.password,
         options: { emailRedirectTo: redirectTo },
       })
       setLoading(null)
@@ -125,15 +143,9 @@ export default function AuthPage() {
       return
     }
 
-    if (!trimmed.includes('@')) {
-      setLoading(null)
-      toast.error('Invalid login credentials')
-      return
-    }
-
     const { error } = await supabase.auth.signInWithPassword({
       email: trimmed,
-      password,
+      password: validated.password,
     })
     setLoading(null)
     if (error) {

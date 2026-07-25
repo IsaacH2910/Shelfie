@@ -37,6 +37,7 @@ import {
   toLookupIsbn,
 } from '@/lib/duplicates'
 import { lookupByIsbn } from '@/lib/bookLookup'
+import { validateBookDraft } from '@/lib/validation'
 import type { Book, BookDraft, HouseholdWithRole } from '@/types'
 
 export function BookForm({
@@ -191,7 +192,13 @@ export function BookForm({
     <form
       onSubmit={(e) => {
         e.preventDefault()
-        if (canSubmit) onSubmit()
+        if (!canSubmit) return
+        const validated = validateBookDraft(value)
+        if (!validated.ok) {
+          toast.error(validated.message)
+          return
+        }
+        onSubmit()
       }}
       className="space-y-5"
     >

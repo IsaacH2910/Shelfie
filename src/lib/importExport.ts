@@ -2,6 +2,7 @@ import type { Book, BookDraft, Ownership } from '@/types'
 import { normalizeOwnership } from '@/lib/ownership'
 import { normalizeCategories } from '@/lib/categories'
 import { normalizeReadingStatus } from '@/lib/reading'
+import { bookDraftSchema } from '@/lib/validation'
 
 function csvEscape(value: string): string {
   if (/[",\n\r]/.test(value)) return `"${value.replace(/"/g, '""')}"`
@@ -252,7 +253,8 @@ export function parseImportJson(text: string): BookDraft[] {
       draft.is_favorite = Boolean(row.is_favorite)
       draft.cover_url =
         typeof row.cover_url === 'string' ? row.cover_url : null
-      return draft
+      const validated = bookDraftSchema.safeParse(draft)
+      return validated.success ? (validated.data as BookDraft) : null
     })
     .filter((d): d is BookDraft => !!d)
 }
